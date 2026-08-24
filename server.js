@@ -353,7 +353,7 @@ app.get('/', (req, res) => {
     const CAREERBOOT_DATA = {
       'Grammar': {
         color: '#dc2626',
-        lesson: \`Grammar forms the structural foundation of professional communication. Master subject-verb agreement (e.g., "The list of items is ready"), appropriate tense consistency, and structural parallelisms. Avoid common errors like dangling modifiers ("Walking to the store, the rain started") and misusing possessive pronouns ("its" vs "it's"). Professional writing demands structural accuracy to convey authority and executive clarity in corporate reporting.\`,
+        lesson: 'Grammar forms the structural foundation of professional communication. Master subject-verb agreement (e.g., "The list of items is ready"), appropriate tense consistency, and structural parallelisms. Avoid common errors like dangling modifiers ("Walking to the store, the rain started") and misusing possessive pronouns ("its" vs "it\'s"). Professional writing demands structural accuracy to convey authority and executive clarity in corporate reporting.',
         mcqs: [
           // Round 1
           { q: "Identify the correctly punctuated sentence.", opts: ["The manager, and supervisor agreed.", "The manager and supervisor agreed.", "The manager, and supervisor, agreed.", "The manager and supervisor, agreed."], a: 1 },
@@ -377,7 +377,7 @@ app.get('/', (req, res) => {
       },
       'Vocabulary': {
         color: '#2563eb',
-        lesson: \`Corporate vocabulary enhances your business influence and persuasiveness. Essential terms include "Synergy" (combined interaction producing greater combined impact), "Mitigate" (make less severe), "Pivot" (strategic change in direction), and "ROI" (Return on Investment). Precision in vocabulary eliminates ambiguity in stakeholder presentations, allowing technical insights to be translated seamlessly into commercial strategies.\`,
+        lesson: 'Corporate vocabulary enhances your business influence and persuasiveness. Essential terms include "Synergy" (combined interaction producing greater combined impact), "Mitigate" (make less severe), "Pivot" (strategic change in direction), and "ROI" (Return on Investment). Precision in vocabulary eliminates ambiguity in stakeholder presentations, allowing technical insights to be translated seamlessly into commercial strategies.',
         mcqs: [
           // Round 1
           { q: "What does 'Mitigate' mean?", opts: ["Increase severity", "Lessen or reduce harm", "Duplicate records", "Delay execution"], a: 1 },
@@ -401,7 +401,7 @@ app.get('/', (req, res) => {
       },
       'MS Excel': {
         color: '#059669',
-        lesson: \`MS Excel is the core engine for data operations and reporting in modern retail and corporate management. Key tools include VLOOKUP/XLOOKUP for cross-table referencing, Pivot Tables for rapid multi-dimensional aggregation, and conditional logic functions like SUMIFS, COUNTIFS, and INDEX/MATCH. Master absolute ($A$1) versus relative cell references to maintain data integrity across multi-tab financial dashboards.\`,
+        lesson: 'MS Excel is the core engine for data operations and reporting in modern retail and corporate management. Key tools include VLOOKUP/XLOOKUP for cross-table referencing, Pivot Tables for rapid multi-dimensional aggregation, and conditional logic functions like SUMIFS, COUNTIFS, and INDEX/MATCH. Master absolute ($A$1) versus relative cell references to maintain data integrity across multi-tab financial dashboards.',
         mcqs: [
           // Round 1
           { q: "Which formula searches for a value in the leftmost column of a table?", opts: ["XLOOKUP", "VLOOKUP", "HLOOKUP", "INDEX"], a: 1 },
@@ -425,7 +425,7 @@ app.get('/', (req, res) => {
       },
       'Business analytics': {
         color: '#d97706',
-        lesson: \`Business Analytics bridges raw datasets and commercial strategy. It leverages descriptive analytics (what happened), diagnostic analytics (why it happened), predictive analytics (what will happen), and prescriptive analytics (how to make it happen). Key performance indicators (KPIs) such as customer acquisition cost (CAC), lifetime value (LTV), churn rate, and net promoter score (NPS) guide executive decision-making.\`,
+        lesson: 'Business Analytics bridges raw datasets and commercial strategy. It leverages descriptive analytics (what happened), diagnostic analytics (why it happened), predictive analytics (what will happen), and prescriptive analytics (how to make it happen). Key performance indicators (KPIs) such as customer acquisition cost (CAC), lifetime value (LTV), churn rate, and net promoter score (NPS) guide executive decision-making.',
         mcqs: [
           // Round 1
           { q: "What type of analytics explains 'What happened in the past'?", opts: ["Predictive", "Descriptive", "Prescriptive", "Diagnostic"], a: 1 },
@@ -900,7 +900,7 @@ app.get('/', (req, res) => {
           if (currentRound < 3) {
             state.careerboot.round++;
             state.careerboot.questionIndex = 0;
-            showPopup(\`ROUND \${currentRound} COMPLETED! Next Round Multiplier Unlocked!`, 'Continue');
+            showPopup(\`ROUND \${currentRound} COMPLETED! Next Round Multiplier Unlocked!\`, 'Continue');
           } else {
             // ALL 3 ROUNDS COMPLETED (VICTORY)
             const finalMult = state.careerboot.accumulatedMultiplier;
@@ -927,7 +927,7 @@ app.get('/', (req, res) => {
         const data = await res.json();
         if (res.ok) state.user.balance = data.newBalance;
 
-        showPopup(\`WRONG ANSWER! YOU LOST ₹\${state.userBet}. Select bet amount and try again!`, 'Bet Again', () => {
+        showPopup(\`WRONG ANSWER! YOU LOST ₹\${state.userBet}. Select bet amount and try again!\`, 'Bet Again', () => {
           state.careerboot.stage = 'WHEEL';
         });
       }
