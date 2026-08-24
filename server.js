@@ -565,16 +565,16 @@ app.get('/', (req, res) => {
     }
 
     function renderBetControllerUI() {
-      return `
+      return \`
         <div class="flex items-center justify-between bg-black/60 p-2 rounded-2xl border border-amber-500/40 w-full max-w-xs shadow-lg">
           <span class="text-xs text-amber-300 font-bold ml-2">BET AMOUNT:</span>
           <div class="flex items-center gap-2">
             <button onclick="updateBetAmount(-10)" class="w-9 h-9 rounded-xl bg-red-900/80 border border-red-500 text-amber-300 font-black text-lg flex items-center justify-center active:scale-95">-</button>
-            <input type="number" readonly value="${state.userBet}" class="bet-amt-input w-20 bg-black/80 border border-amber-500/50 rounded-xl text-center font-mono font-bold text-amber-300 py-1.5 text-sm outline-none">
+            <input type="number" readonly value="\${state.userBet}" class="bet-amt-input w-20 bg-black/80 border border-amber-500/50 rounded-xl text-center font-mono font-bold text-amber-300 py-1.5 text-sm outline-none">
             <button onclick="updateBetAmount(10)" class="w-9 h-9 rounded-xl bg-emerald-900/80 border border-emerald-500 text-amber-300 font-black text-lg flex items-center justify-center active:scale-95">+</button>
           </div>
         </div>
-      `;
+      \`;
     }
 
     async function handleAviatorAction() {
@@ -589,7 +589,7 @@ app.get('/', (req, res) => {
           const winAmt = +(state.userBet * state.aviator.currentX).toFixed(2);
           state.user.balance += (winAmt - state.userBet);
           sound.playWin();
-          showPopup(`CASHED OUT AT ${state.aviator.currentX.toFixed(2)}x! WON ₹${winAmt}`, 'Paisa hi Paisa');
+          showPopup(\`CASHED OUT AT \${state.aviator.currentX.toFixed(2)}x! WON ₹\${winAmt}\`, 'Paisa hi Paisa');
           state.hasBetAviator = false;
           renderAviatorOverlay();
         } else if (!state.hasBetAviator && !state.nextRoundBet) {
@@ -659,22 +659,22 @@ app.get('/', (req, res) => {
 
       if (xElem) {
         xElem.innerText = state.aviator.currentX.toFixed(2) + 'x';
-        xElem.className = `text-5xl font-black font-mono ${state.aviator.status === 'CRASHED' ? 'text-red-500' : 'text-amber-400'}`;
+        xElem.className = \`text-5xl font-black font-mono \${state.aviator.status === 'CRASHED' ? 'text-red-500' : 'text-amber-400'}\`;
       }
       if (statusElem) {
         statusElem.innerText = state.aviator.status === 'WAITING' ? 'WAITING FOR NEXT ROUND (5s)' : (state.aviator.status === 'FLYING' ? 'FLYING' : 'FLEW AWAY!');
-        statusElem.className = `text-xs font-bold px-3 py-1 rounded-full ${state.aviator.status === 'FLYING' ? 'bg-amber-900/80 text-amber-300 border border-amber-500' : 'bg-red-900/80 text-red-300 border border-red-500'}`;
+        statusElem.className = \`text-xs font-bold px-3 py-1 rounded-full \${state.aviator.status === 'FLYING' ? 'bg-amber-900/80 text-amber-300 border border-amber-500' : 'bg-red-900/80 text-red-300 border border-red-500'}\`;
       }
 
       if (actionBtn) {
         if (state.aviator.status === 'WAITING') {
           actionBtn.disabled = state.hasBetAviator;
-          actionBtn.innerHTML = state.hasBetAviator ? 'BET PLACED FOR NEXT ROUND' : `BET ₹${state.userBet}`;
-          actionBtn.className = `w-full h-14 rounded-2xl font-black text-xl tracking-wider transition-all shadow-lg ${state.hasBetAviator ? 'bg-gray-700 text-gray-400' : 'bg-red-600 text-white border-2 border-red-400'}`;
+          actionBtn.innerHTML = state.hasBetAviator ? 'BET PLACED FOR NEXT ROUND' : \`BET ₹\${state.userBet}\`;
+          actionBtn.className = \`w-full h-14 rounded-2xl font-black text-xl tracking-wider transition-all shadow-lg \${state.hasBetAviator ? 'bg-gray-700 text-gray-400' : 'bg-red-600 text-white border-2 border-red-400'}\`;
         } else if (state.aviator.status === 'FLYING') {
           if (state.hasBetAviator && !state.cashedOut) {
             actionBtn.disabled = false;
-            actionBtn.innerHTML = `CASH OUT (₹${(state.userBet * state.aviator.currentX).toFixed(2)})`;
+            actionBtn.innerHTML = \`CASH OUT (₹\${(state.userBet * state.aviator.currentX).toFixed(2)})\`;
             actionBtn.className = 'w-full h-14 rounded-2xl font-black text-xl tracking-wider shadow-lg bg-emerald-500 text-black border-2 border-green-300 animate-pulse';
           } else if (state.nextRoundBet) {
             actionBtn.disabled = true;
@@ -682,7 +682,7 @@ app.get('/', (req, res) => {
             actionBtn.className = 'w-full h-14 rounded-2xl font-black text-lg tracking-wider shadow-lg bg-amber-700 text-amber-200 border border-amber-500';
           } else {
             actionBtn.disabled = false;
-            actionBtn.innerHTML = `BET FOR NEXT ROUND (₹${state.userBet})`;
+            actionBtn.innerHTML = \`BET FOR NEXT ROUND (₹\${state.userBet})\`;
             actionBtn.className = 'w-full h-14 rounded-2xl font-black text-lg tracking-wider shadow-lg bg-red-700 text-white border border-red-400';
           }
         } else {
@@ -723,10 +723,10 @@ app.get('/', (req, res) => {
             setTimeout(() => {
               if (data.won) {
                 sound.playWin();
-                showPopup(`MATCHED! Sum is ${data.resultMeta.sum}. WON ₹${(state.userBet * data.rewardMultiplier).toFixed(2)} (${data.rewardMultiplier}x)!`, 'Paisa hi Paisa');
+                showPopup(\`MATCHED! Sum is \${data.resultMeta.sum}. WON ₹\${(state.userBet * data.rewardMultiplier).toFixed(2)} (\${data.rewardMultiplier}x)!\`, 'Paisa hi Paisa');
               } else {
                 sound.playLoss();
-                showPopup(`MISMATCH! Sum is ${data.resultMeta.sum}. YOU LOST!`, 'Try Again');
+                showPopup(\`MISMATCH! Sum is \${data.resultMeta.sum}. YOU LOST!\`, 'Try Again');
               }
             }, 500);
           } else {
@@ -778,12 +778,12 @@ app.get('/', (req, res) => {
             state.user.balance = data.newBalance;
             if (data.won) {
               sound.playWin();
-              showPopup(`SUCCESS! Entry: ₹${startVal} | Exit: ₹${endVal}. WON ₹${(state.userBet * 2).toFixed(2)}!`, 'Paisa hi Paisa', () => {
+              showPopup(\`SUCCESS! Entry: ₹\${startVal} | Exit: ₹\${endVal}. WON ₹\${(state.userBet * 2).toFixed(2)}!\`, 'Paisa hi Paisa', () => {
                 state.predictionMark1 = null; state.predictionMark2 = null;
               });
             } else {
               sound.playLoss();
-              showPopup(`FAILED! Entry: ₹${startVal} | Exit: ₹${endVal}. YOU LOST!`, 'Try Again', () => {
+              showPopup(\`FAILED! Entry: ₹\${startVal} | Exit: ₹\${endVal}. YOU LOST!\`, 'Try Again', () => {
                 state.predictionMark1 = null; state.predictionMark2 = null;
               });
             }
@@ -923,7 +923,7 @@ app.get('/', (req, res) => {
           if (currentRound < 3) {
             state.careerboot.round++;
             state.careerboot.questionIndex = 0;
-            showPopup(`ROUND ${currentRound} COMPLETED! Next Round Multiplier Unlocked!`, 'Continue');
+            showPopup(\`ROUND \${currentRound} COMPLETED! Next Round Multiplier Unlocked!\`, 'Continue');
           } else {
             const finalMult = state.careerboot.accumulatedMultiplier;
             const res = await fetch('/api/play-instant', {
@@ -934,7 +934,7 @@ app.get('/', (req, res) => {
             if (res.ok) state.user.balance = data.newBalance;
 
             sound.playWin();
-            showPopup(`ALL ROUNDS PASSED! Total Multiplier ${finalMult.toFixed(2)}x! WON ₹${(state.userBet * finalMult).toFixed(2)}!`, 'Paisa hi Paisa', () => {
+            showPopup(\`ALL ROUNDS PASSED! Total Multiplier \${finalMult.toFixed(2)}x! WON ₹\${(state.userBet * finalMult).toFixed(2)}!\`, 'Paisa hi Paisa', () => {
               state.careerboot.stage = 'WHEEL';
             });
           }
@@ -948,7 +948,7 @@ app.get('/', (req, res) => {
         const data = await res.json();
         if (res.ok) state.user.balance = data.newBalance;
 
-        showPopup(`WRONG ANSWER! YOU LOST ₹${state.userBet}. Select bet amount and try again!`, 'Bet Again', () => {
+        showPopup(\`WRONG ANSWER! YOU LOST ₹\${state.userBet}. Select bet amount and try again!\`, 'Bet Again', () => {
           state.careerboot.stage = 'WHEEL';
         });
       }
@@ -1029,7 +1029,7 @@ app.get('/', (req, res) => {
       state.pulseRadius = (state.pulseRadius + 0.3) % 12;
       ctx.beginPath();
       ctx.arc(lastX - 4, lastY, 4 + state.pulseRadius, 0, Math.PI * 2);
-      ctx.strokeStyle = `rgba(34, 197, 94, ${1 - state.pulseRadius / 12})`;
+      ctx.strokeStyle = \`rgba(34, 197, 94, \${1 - state.pulseRadius / 12})\`;
       ctx.lineWidth = 2;
       ctx.stroke();
 
@@ -1104,20 +1104,20 @@ app.get('/', (req, res) => {
 
       let popupHtml = '';
       if (state.popup) {
-        popupHtml = `
+        popupHtml = \`
           <div class="absolute inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
             <div class="tomato-card p-6 rounded-3xl max-w-xs w-full text-center space-y-4 popup-anim">
-              <h2 class="text-xl font-black text-amber-300 tracking-wide">${state.popup.title}</h2>
+              <h2 class="text-xl font-black text-amber-300 tracking-wide">\${state.popup.title}</h2>
               <button onclick="closePopup()" class="w-full gold-gradient text-black font-black py-3 rounded-2xl shadow-xl active:scale-95">
-                ${state.popup.btnText}
+                \${state.popup.btnText}
               </button>
             </div>
           </div>
-        `;
+        \`;
       }
 
       if (state.currentView === 'login') {
-        html = `
+        html = \`
           <div class="h-full w-full flex flex-col items-center justify-center p-6 bg-gradient-to-b from-[#2a0404] to-[#0d0202]">
             <div class="tomato-card p-8 rounded-3xl w-full text-center space-y-5">
               <div class="text-6xl">🤑</div>
@@ -1134,81 +1134,81 @@ app.get('/', (req, res) => {
               </button>
             </div>
           </div>
-        `;
+        \`;
       }
 
       else if (state.currentView === 'lobby') {
-        html = `
+        html = \`
           <div class="h-full w-full flex flex-col bg-[#120303]">
             <div class="h-16 px-4 bg-gradient-to-r from-red-950 via-black to-red-950 border-b border-amber-500/40 flex items-center justify-between shadow-lg">
               <span class="font-black text-lg gold-text">Kismat ka Khel 🤑</span>
               <div class="flex items-center gap-2">
                 <div class="bg-black/60 px-3 py-1.5 rounded-full border border-amber-500/40">
                   <span class="text-xs text-amber-300 font-bold">₹</span>
-                  <span class="text-sm font-mono font-bold text-green-400">${state.user ? state.user.balance.toFixed(2) : '0.00'}</span>
+                  <span class="text-sm font-mono font-bold text-green-400">\${state.user ? state.user.balance.toFixed(2) : '0.00'}</span>
                 </div>
                 <button onclick="switchView('pwchange')" class="px-2.5 py-1 bg-amber-600/30 border border-amber-500/50 rounded-lg text-[10px] font-bold text-amber-300">Password</button>
                 <button onclick="switchView('login')" class="px-2.5 py-1 bg-red-900/50 border border-red-500/50 rounded-lg text-[10px] font-bold text-red-300">Logout</button>
               </div>
             </div>
             <div class="flex-1 p-4 grid grid-cols-2 gap-4 overflow-y-auto">
-              ${[
+              \${[
                 { id: 'careerboot', name: 'CareerBoot', icon: '🎓', desc: 'Wheel & MCQ Rounds' },
                 { id: 'aviator', name: 'Aviator', icon: '🚀', desc: 'Realtime Multiplier' },
                 { id: 'guesscorrect', name: 'Guess Correct', icon: '🎲', desc: 'Big vs Small Dice' },
                 { id: 'prediction', name: 'Prediction', icon: '📈', desc: 'Live Market Line' }
-              ].map(g => `
-                <button onclick="switchView('${g.id}')" class="tomato-card p-4 rounded-3xl flex flex-col items-center justify-center text-center space-y-2 active:scale-95 transition-all">
-                  <span class="text-4xl">${g.icon}</span>
+              ].map(g => \`
+                <button onclick="switchView('\${g.id}')" class="tomato-card p-4 rounded-3xl flex flex-col items-center justify-center text-center space-y-2 active:scale-95 transition-all">
+                  <span class="text-4xl">\${g.icon}</span>
                   <div>
-                    <div class="font-black text-amber-300 text-sm">${g.name}</div>
-                    <div class="text-[10px] text-amber-100/60">${g.desc}</div>
+                    <div class="font-black text-amber-300 text-sm">\${g.name}</div>
+                    <div class="text-[10px] text-amber-100/60">\${g.desc}</div>
                   </div>
                 </button>
-              `).join('')}
+              \`).join('')}
             </div>
           </div>
-        `;
+        \`;
       }
 
       else if (state.currentView === 'careerboot') {
         const cb = state.careerboot;
         if (cb.stage === 'WHEEL') {
-          html = `
+          html = \`
             <div class="h-full w-full flex flex-col bg-[#120303]">
               <div class="h-14 px-3 bg-red-950 border-b border-amber-500/40 flex items-center justify-between">
                 <button onclick="switchView('lobby')" class="px-3 py-1 bg-red-900 border border-amber-500/40 rounded-xl text-xs font-bold text-white">Lobby</button>
                 <span class="font-black gold-text">CAREERBOOT WHEEL</span>
-                <span class="font-mono text-sm text-green-400 font-bold">₹${state.user ? state.user.balance.toFixed(2) : '0.00'}</span>
+                <span class="font-mono text-sm text-green-400 font-bold">₹\${state.user ? state.user.balance.toFixed(2) : '0.00'}</span>
               </div>
               <div class="flex-1 flex flex-col items-center justify-center p-4 space-y-4">
                 <div class="relative w-72 h-72 flex items-center justify-center">
                   <canvas id="cb-wheel-canvas" class="w-full h-full"></canvas>
                 </div>
-                ${renderBetControllerUI()}
-                <button onclick="spinCareerBootWheel()" ${cb.spinning ? 'disabled' : ''} class="w-full max-w-xs h-14 rounded-2xl font-black text-xl tracking-wider gold-gradient text-black shadow-xl active:scale-95 transition-all">
-                  ${cb.spinning ? 'SPINNING...' : 'SPIN THE WHEEL 🎡'}
+                \${renderBetControllerUI()}
+                <button onclick="spinCareerBootWheel()" \${cb.spinning ? 'disabled' : ''} class="w-full max-w-xs h-14 rounded-2xl font-black text-xl tracking-wider gold-gradient text-black shadow-xl active:scale-95 transition-all">
+                  \${cb.spinning ? 'SPINNING...' : 'SPIN THE WHEEL 🎡'}
                 </button>
               </div>
             </div>
-          `;
+          \`;
         } else if (cb.stage === 'LESSON') {
           const sliceData = CAREERBOOT_DATA[cb.selectedSlice];
-          html = `
+          html = \`
             <div class="h-full w-full flex flex-col bg-[#120303] animate-expand">
               <div class="h-14 px-3 bg-red-950 border-b border-amber-500/40 flex items-center justify-between shrink-0">
                 <button onclick="state.careerboot.stage='WHEEL'; render();" class="px-3 py-1 bg-red-900 border border-amber-500/40 rounded-xl text-xs font-bold text-white">Wheel</button>
-                <span class="font-black gold-text uppercase">${cb.selectedSlice} MODULE</span>
-                <span class="font-mono text-sm text-green-400 font-bold">₹${state.user ? state.user.balance.toFixed(2) : '0.00'}</span>
+                <span class="font-black gold-text uppercase">\${cb.selectedSlice} MODULE</span>
+                <span class="font-mono text-sm text-green-400 font-bold">₹\${state.user ? state.user.balance.toFixed(2) : '0.00'}</span>
               </div>
               <div class="flex-1 p-5 overflow-y-auto space-y-4">
                 <div class="tomato-card p-6 rounded-3xl space-y-3">
                   <div class="flex items-center gap-2">
                     <span class="text-2xl">📘</span>
-                    <h2 class="text-xl font-black text-amber-300 uppercase">${cb.selectedSlice} Comprehensive Lesson</h2>
+                    <h2 class="text-xl font-black text-amber-300 uppercase">\${cb.selectedSlice} Comprehensive Lesson</h2>
                   </div>
                   <p class="text-sm text-amber-100/90 leading-relaxed text-justify font-sans">
-                    ${sliceData.lesson}
+                    \${sliceData.lesson}
                   </p>
                 </div>
               </div>
@@ -1218,42 +1218,42 @@ app.get('/', (req, res) => {
                 </button>
               </div>
             </div>
-          `;
+          \`;
         } else if (cb.stage === 'MCQ') {
           const qIdx = (cb.round - 1) * 5 + cb.questionIndex;
           const qObj = cb.activeQuestions[qIdx];
           const roundMultText = cb.round === 1 ? '+1.40x' : (cb.round === 2 ? '+1.60x' : '+2.00x');
 
-          html = `
+          html = \`
             <div class="h-full w-full flex flex-col bg-[#120303]">
               <div class="h-14 px-3 bg-red-950 border-b border-amber-500/40 flex items-center justify-between shrink-0">
-                <span class="text-xs font-bold text-amber-300">ROUND ${cb.round}/3</span>
-                <span class="font-black gold-text uppercase">${cb.selectedSlice}</span>
-                <span class="text-xs font-mono font-bold text-green-400">MULT: ${roundMultText}</span>
+                <span class="text-xs font-bold text-amber-300">ROUND \${cb.round}/3</span>
+                <span class="font-black gold-text uppercase">\${cb.selectedSlice}</span>
+                <span class="text-xs font-mono font-bold text-green-400">MULT: \${roundMultText}</span>
               </div>
               <div class="p-3 bg-black/40 border-b border-amber-500/20 flex justify-between items-center shrink-0">
-                <span class="text-xs text-amber-200/70 font-semibold">Question ${cb.questionIndex + 1} of 5</span>
-                <span class="text-xs font-mono text-amber-300 font-bold">ACCUMULATED: ${cb.accumulatedMultiplier.toFixed(2)}x</span>
+                <span class="text-xs text-amber-200/70 font-semibold">Question \${cb.questionIndex + 1} of 5</span>
+                <span class="text-xs font-mono text-amber-300 font-bold">ACCUMULATED: \${cb.accumulatedMultiplier.toFixed(2)}x</span>
               </div>
               <div class="flex-1 p-5 flex flex-col justify-between overflow-y-auto">
                 <div class="tomato-card p-6 rounded-3xl space-y-4">
-                  <h3 class="text-base font-bold text-amber-300 leading-snug">${qObj ? qObj.q : ''}</h3>
+                  <h3 class="text-base font-bold text-amber-300 leading-snug">\${qObj ? qObj.q : ''}</h3>
                 </div>
                 <div class="space-y-3 my-4">
-                  ${qObj ? qObj.opts.map((opt, idx) => `
-                    <button onclick="handleCareerBootAnswer(${idx})" class="w-full p-4 rounded-2xl bg-black/70 border border-amber-500/40 text-left text-sm font-semibold text-white active:bg-amber-500 active:text-black transition-all shadow-md">
-                      <span class="text-amber-400 font-black mr-2">${['A','B','C','D'][idx]}.</span> ${opt}
+                  \${qObj ? qObj.opts.map((opt, idx) => \`
+                    <button onclick="handleCareerBootAnswer(\${idx})" class="w-full p-4 rounded-2xl bg-black/70 border border-amber-500/40 text-left text-sm font-semibold text-white active:bg-amber-500 active:text-black transition-all shadow-md">
+                      <span class="text-amber-400 font-black mr-2">\${['A','B','C','D'][idx]}.</span> \${opt}
                     </button>
-                  `).join('') : ''}
+                  \`).join('') : ''}
                 </div>
               </div>
             </div>
-          `;
+          \`;
         }
       }
 
       else if (state.currentView === 'pwchange') {
-        html = `
+        html = \`
           <div class="h-full w-full flex flex-col bg-[#120303] p-6 justify-center">
             <div class="tomato-card p-6 rounded-3xl space-y-4">
               <h2 class="text-xl font-black text-amber-300 text-center">Change Password</h2>
@@ -1265,35 +1265,35 @@ app.get('/', (req, res) => {
               </div>
             </div>
           </div>
-        `;
+        \`;
       }
 
       else if (state.currentView === 'aviator') {
-        html = `
+        html = \`
           <div class="h-full w-full flex flex-col bg-[#0b0e14]">
             <div class="h-14 px-3 bg-[#141822] border-b border-gray-800 flex items-center justify-between shrink-0">
               <button onclick="switchView('lobby')" class="px-3 py-1 bg-red-900/80 border border-red-500/50 rounded-xl text-xs font-bold text-white">Lobby</button>
               <span class="font-black text-amber-400 text-sm tracking-wider">AVIATOR 24x7</span>
-              <span class="font-mono text-sm text-green-400 font-bold">₹${state.user ? state.user.balance.toFixed(2) : '0.00'}</span>
+              <span class="font-mono text-sm text-green-400 font-bold">₹\${state.user ? state.user.balance.toFixed(2) : '0.00'}</span>
             </div>
             <div class="h-10 px-2 bg-black/60 border-b border-gray-800/80 flex items-center gap-1.5 overflow-x-auto shrink-0 no-scrollbar">
-              ${state.aviator.history.slice(0, 20).map(h => `<span class="px-2.5 py-0.5 text-[11px] font-mono font-bold rounded-full bg-gray-800 text-purple-300 border border-purple-500/30 shrink-0">${h}x</span>`).join('')}
+              \${state.aviator.history.slice(0, 20).map(h => \`<span class="px-2.5 py-0.5 text-[11px] font-mono font-bold rounded-full bg-gray-800 text-purple-300 border border-purple-500/30 shrink-0">\${h}x</span>\`).join('')}
             </div>
             <div class="flex-1 relative bg-gradient-to-b from-[#0b0e14] to-[#161c27] flex items-center justify-center overflow-hidden">
               <canvas id="aviator-canvas" class="absolute inset-0 w-full h-full"></canvas>
               <div class="relative z-10 flex flex-col items-center text-center space-y-2 pointer-events-none">
-                <div id="aviator-x" class="text-5xl font-black font-mono gold-text">${state.aviator.currentX.toFixed(2)}x</div>
+                <div id="aviator-x" class="text-5xl font-black font-mono gold-text">\${state.aviator.currentX.toFixed(2)}x</div>
                 <div id="aviator-status" class="text-xs font-bold px-3 py-1 rounded-full bg-amber-900/80 text-amber-300 border border-amber-500">CONNECTING...</div>
               </div>
             </div>
             <div class="p-4 bg-[#141822] border-t border-gray-800 shrink-0 space-y-3 flex flex-col items-center">
-              ${renderBetControllerUI()}
+              \${renderBetControllerUI()}
               <button id="aviator-btn" onclick="handleAviatorAction()" class="w-full max-w-xs h-14 rounded-2xl font-black text-xl tracking-wider bg-red-600 text-white shadow-lg">
-                BET ₹${state.userBet}
+                BET ₹\${state.userBet}
               </button>
             </div>
           </div>
-        `;
+        \`;
       }
 
       else if (state.currentView === 'guesscorrect') {
@@ -1306,28 +1306,28 @@ app.get('/', (req, res) => {
           6: ['col-start-1 row-start-1 bg-white', 'col-start-3 row-start-1 bg-white', 'col-start-1 row-start-2 bg-white', 'col-start-3 row-start-2 bg-white', 'col-start-1 row-start-3 bg-white', 'col-start-3 row-start-3 bg-white']
         };
 
-        const renderDice = (val) => `
+        const renderDice = (val) => \`
           <div class="w-20 h-20 bg-gradient-to-br from-red-600 to-red-950 border-2 border-amber-400 rounded-2xl shadow-xl grid grid-cols-3 grid-rows-3 p-3 gap-1">
-            ${(diceDots[val] || []).map(cls => `<div class="w-3.5 h-3.5 rounded-full shadow-inner ${cls}"></div>`).join('')}
+            \${(diceDots[val] || []).map(cls => \`<div class="w-3.5 h-3.5 rounded-full shadow-inner \${cls}"></div>\`).join('')}
           </div>
-        `;
+        \`;
 
-        html = `
+        html = \`
           <div class="h-full w-full flex flex-col bg-[#120303]">
             <div class="h-14 px-3 bg-red-950 border-b border-amber-500/40 flex items-center justify-between">
               <button onclick="switchView('lobby')" class="px-3 py-1 bg-red-900 border border-amber-500/40 rounded-xl text-xs font-bold text-white">Lobby</button>
               <span class="font-black gold-text">GUESS CORRECT</span>
-              <span class="font-mono text-sm text-green-400 font-bold">₹${state.user ? state.user.balance.toFixed(2) : '0.00'}</span>
+              <span class="font-mono text-sm text-green-400 font-bold">₹\${state.user ? state.user.balance.toFixed(2) : '0.00'}</span>
             </div>
             <div class="flex-1 flex flex-col items-center justify-center p-6 space-y-6">
               <div class="tomato-card p-6 rounded-3xl w-full max-w-xs text-center space-y-3">
                 <div class="flex justify-center gap-6">
-                  ${renderDice(state.diceResults[0])}
-                  ${renderDice(state.diceResults[1])}
+                  \${renderDice(state.diceResults[0])}
+                  \${renderDice(state.diceResults[1])}
                 </div>
                 <p class="text-xs text-amber-200/70 font-bold">Predict Dice Total Sum</p>
               </div>
-              ${renderBetControllerUI()}
+              \${renderBetControllerUI()}
               <div class="grid grid-cols-2 gap-4 w-full max-w-xs">
                 <button onclick="playDiceGame('small')" class="tomato-card h-16 rounded-2xl flex flex-col items-center justify-center space-y-0.5 active:scale-95">
                   <span class="font-black text-lg text-amber-300">SMALL</span>
@@ -1340,16 +1340,16 @@ app.get('/', (req, res) => {
               </div>
             </div>
           </div>
-        `;
+        \`;
       }
 
       else if (state.currentView === 'prediction') {
-        html = `
+        html = \`
           <div class="h-full w-full flex flex-col bg-[#0b0404]">
             <div class="h-14 px-3 bg-red-950 border-b border-amber-500/40 flex items-center justify-between">
               <button onclick="switchView('lobby')" class="px-3 py-1 bg-red-900/80 border border-amber-500/40 rounded-xl text-xs font-bold text-white">Lobby</button>
               <span class="font-black gold-text tracking-wider">PREDICTION PRO</span>
-              <span class="font-mono text-sm text-green-400 font-bold">₹${state.user ? state.user.balance.toFixed(2) : '0.00'}</span>
+              <span class="font-mono text-sm text-green-400 font-bold">₹\${state.user ? state.user.balance.toFixed(2) : '0.00'}</span>
             </div>
             <div class="flex-1 flex flex-col items-center justify-between p-3 space-y-3">
               <div class="w-full flex-1 bg-gradient-to-b from-[#090d16] to-[#04060a] border-2 border-emerald-500/30 rounded-3xl relative overflow-hidden flex flex-col p-2 min-h-[280px] shadow-[0_0_20px_rgba(16,185,129,0.15)]">
@@ -1358,16 +1358,16 @@ app.get('/', (req, res) => {
                   <div class="flex items-center gap-2 bg-black/80 backdrop-blur-md px-3 py-1.5 rounded-2xl border border-emerald-500/40 shadow-lg">
                     <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></span>
                     <span class="text-xs font-bold text-emerald-400 uppercase tracking-widest">LIVE</span>
-                    <span class="text-sm font-mono font-black text-white ml-1">₹${state.marketHistory[state.marketHistory.length - 1]}</span>
+                    <span class="text-sm font-mono font-black text-white ml-1">₹\${state.marketHistory[state.marketHistory.length - 1]}</span>
                   </div>
-                  ${state.predictionTimer > 0 ? `
+                  \${state.predictionTimer > 0 ? \`
                     <div class="text-xs font-mono font-black text-amber-300 bg-amber-950/90 backdrop-blur-md px-3 py-1.5 rounded-2xl border border-amber-500/60 animate-pulse shadow-lg">
-                      LOCKING IN ${state.predictionTimer}s
+                      LOCKING IN \${state.predictionTimer}s
                     </div>
-                  ` : ''}
+                  \` : ''}
                 </div>
               </div>
-              ${renderBetControllerUI()}
+              \${renderBetControllerUI()}
               <div class="grid grid-cols-2 gap-4 w-full max-w-xs shrink-0">
                 <button onclick="playPrediction('up')" class="bg-gradient-to-b from-emerald-500 to-emerald-700 border-2 border-emerald-400 h-14 rounded-2xl font-black text-lg active:scale-95 text-white shadow-[0_0_15px_rgba(16,185,129,0.4)] flex items-center justify-center gap-2">
                   <span>UP</span>
@@ -1380,11 +1380,11 @@ app.get('/', (req, res) => {
               </div>
             </div>
           </div>
-        `;
+        \`;
       }
 
       else if (state.currentView === 'admin') {
-        html = `
+        html = \`
           <div class="h-full w-full flex flex-col bg-[#0b0202] p-4 overflow-hidden">
             <div class="flex justify-between items-center border-b border-amber-500/40 pb-3 shrink-0">
               <h1 class="text-lg font-black gold-text">Admin Panel (Boss)</h1>
@@ -1395,19 +1395,19 @@ app.get('/', (req, res) => {
             </div>
 
             <div class="flex gap-2 my-3 shrink-0">
-              <button onclick="state.adminSubTab='users'; render();" class="w-1/2 py-2 rounded-xl font-bold text-xs ${state.adminSubTab==='users' ? 'gold-gradient text-black' : 'bg-gray-800 text-gray-400'}">Users Management</button>
-              <button onclick="state.adminSubTab='create'; render();" class="w-1/2 py-2 rounded-xl font-bold text-xs ${state.adminSubTab==='create' ? 'gold-gradient text-black' : 'bg-gray-800 text-gray-400'}">Create User</button>
+              <button onclick="state.adminSubTab='users'; render();" class="w-1/2 py-2 rounded-xl font-bold text-xs \${state.adminSubTab==='users' ? 'gold-gradient text-black' : 'bg-gray-800 text-gray-400'}">Users Management</button>
+              <button onclick="state.adminSubTab='create'; render();" class="w-1/2 py-2 rounded-xl font-bold text-xs \${state.adminSubTab==='create' ? 'gold-gradient text-black' : 'bg-gray-800 text-gray-400'}">Create User</button>
             </div>
 
             <div class="flex-1 overflow-y-auto space-y-4">
-              ${state.adminSubTab === 'create' ? `
+              \${state.adminSubTab === 'create' ? \`
                 <div class="tomato-card p-4 rounded-2xl space-y-3">
                   <h3 class="font-bold text-sm text-amber-300">Create Player Account</h3>
                   <input id="nu" placeholder="New Username" class="w-full p-3 bg-black/60 border border-amber-500/40 rounded-xl text-sm outline-none text-white">
                   <input id="np" placeholder="New Password" class="w-full p-3 bg-black/60 border border-amber-500/40 rounded-xl text-sm outline-none text-white">
                   <button onclick="createPlayer()" class="w-full gold-gradient text-black font-black py-3 rounded-xl text-sm">Create Account</button>
                 </div>
-              ` : `
+              \` : \`
                 <div class="tomato-card p-4 rounded-2xl space-y-3">
                   <h3 class="font-bold text-sm text-amber-300">Modify User Balance</h3>
                   <input id="bu" placeholder="Player Username" class="w-full p-3 bg-black/60 border border-amber-500/40 rounded-xl text-sm outline-none text-white">
@@ -1417,24 +1417,24 @@ app.get('/', (req, res) => {
 
                 <div class="space-y-2">
                   <h3 class="font-bold text-xs text-amber-300/80">ALL PLAYERS STATISTICS</h3>
-                  ${state.adminUsers.map(u => `
+                  \${state.adminUsers.map(u => \`
                     <div class="bg-black/60 p-3 rounded-xl border border-amber-500/30 text-xs space-y-1">
                       <div class="flex justify-between font-bold text-amber-300">
-                        <span>👤 ${u.username}</span>
-                        <span class="text-green-400 font-mono">₹${u.balance.toFixed(2)}</span>
+                        <span>👤 \${u.username}</span>
+                        <span class="text-green-400 font-mono">₹\${u.balance.toFixed(2)}</span>
                       </div>
                       <div class="grid grid-cols-3 gap-1 text-[10px] text-gray-400 font-mono mt-1">
-                        <div>Won: <span class="text-green-400">₹${u.totalWon}</span></div>
-                        <div>Lost: <span class="text-red-400">₹${u.totalLost}</span></div>
-                        <div>Placed: <span class="text-amber-200">₹${u.totalBetPlaced}</span></div>
+                        <div>Won: <span class="text-green-400">₹\${u.totalWon}</span></div>
+                        <div>Lost: <span class="text-red-400">₹\${u.totalLost}</span></div>
+                        <div>Placed: <span class="text-amber-200">₹\${u.totalBetPlaced}</span></div>
                       </div>
                     </div>
-                  `).join('')}
+                  \`).join('')}
                 </div>
-              `}
+              \`}
             </div>
           </div>
-        `;
+        \`;
       }
 
       app.innerHTML = html + popupHtml;
