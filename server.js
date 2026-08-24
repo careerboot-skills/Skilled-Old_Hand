@@ -1203,7 +1203,7 @@ app.get('/', (req, res) => {
                 <input id="p" oninput="checkLoginInputsDirectly()" type="password" placeholder="Password" class="w-full p-4 rounded-2xl bg-black/60 border border-amber-500/40 text-white placeholder-amber-200/40 text-sm outline-none">
               </div>
               <button id="lbtn" onclick="handleLogin()" class="hidden w-full gold-gradient text-black font-black py-4 rounded-2xl shadow-xl text-lg">
-                Paisa hi Paisa Hoga 💰
+                Path of Success 💰
               </button>
             </div>
           </div>
@@ -1214,7 +1214,7 @@ app.get('/', (req, res) => {
         html = \`
           <div class="h-full w-full flex flex-col bg-[#120303]">
             <div class="h-16 px-4 bg-gradient-to-r from-red-950 via-black to-red-950 border-b border-amber-500/40 flex items-center justify-between shadow-lg">
-              <span class="font-black text-lg gold-text">Kismat ka Khel 🤑</span>
+              <span class="font-black text-lg gold-text">Skilled Old Hand 🤑</span>
               <div class="flex items-center gap-2">
                 <div class="bg-black/60 px-3 py-1.5 rounded-full border border-amber-500/40">
                   <span class="text-xs text-amber-300 font-bold">₹</span>
@@ -1226,10 +1226,10 @@ app.get('/', (req, res) => {
             </div>
             <div class="flex-1 p-4 grid grid-cols-2 gap-4 overflow-y-auto">
               \${[
-                { id: 'careerboot', name: 'CareerBoot', icon: '🎓', desc: 'Wheel & MCQ Rounds' },
+                { id: 'careerboot', name: 'CareerBoot', icon: '🎓', desc: 'Learn & Earn' },
                 { id: 'aviator', name: 'Aviator', icon: '🚀', desc: 'Realtime Multiplier' },
                 { id: 'guesscorrect', name: 'Guess Correct', icon: '🎲', desc: 'Big vs Small Dice' },
-                { id: 'prediction', name: 'Prediction', icon: '📈', desc: 'Live Market Line' }
+                { id: 'prediction', name: 'Prediction', icon: '📈', desc: 'Live Market Price' }
               ].map(g => \`
                 <button onclick="switchView('\${g.id}')" class="tomato-card p-4 rounded-3xl flex flex-col items-center justify-center text-center space-y-2 active:scale-95 transition-all">
                   <span class="text-4xl">\${g.icon}</span>
