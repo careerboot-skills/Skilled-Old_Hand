@@ -459,7 +459,7 @@ app.get('/', (req, res) => {
             <h3 class="text-base font-bold text-amber-300 border-b border-amber-500/30 pb-1 mt-4">CHAPTER 2: Data Aggregation & Summarization</h3>
             <p><strong>4. Pivot Tables:</strong> Pivot Tables rapidly aggregate, summarize, and cross-tabulate large datasets without writing complex formulas.</p>
             <p><strong>5. Conditional Functions:</strong> COUNTIF counts cells matching a single condition, while AVERAGEIFS calculates average values meeting multiple criteria.</p>
-            <p><strong>6. Logical Statements:</strong> The IF function evaluates expressions (\`=IF(5>3, 'Yes', 'No')\` returns 'Yes').</p>
+            <p><strong>6. Logical Statements:</strong> The IF function evaluates expressions (=IF(5>3, 'Yes', 'No') returns 'Yes').</p>
 
             <h3 class="text-base font-bold text-amber-300 border-b border-amber-500/30 pb-1 mt-4">CHAPTER 3: Error Handling & Text Formatting</h3>
             <p><strong>7. Error Codes:</strong> #N/A indicates a value is not available. #DIV/0! signifies division by zero.</p>
@@ -517,7 +517,7 @@ app.get('/', (req, res) => {
           { q: "Which metric measures customer willingness to recommend?", opts: ["ROI", "NPS (Net Promoter Score)", "CTR", "CPM"], a: 1 },
           { q: "What is an outlier in a dataset?", opts: ["Average value", "Data point significantly different from others", "Median value", "Missing value"], a: 1 },
           { q: "What does Data Mining involve?", opts: ["Hardware extraction", "Discovering patterns in large datasets", "Writing SQL queries only", "Deleting logs"], a: 1 },
-          { q: "What chart type best shows trends over time?", opts: ["Pie Chart", "Line Chart", "Scatter Plot", "Gauge Chart"], a: 1 },
+          { q: "Which chart type best shows trends over time?", opts: ["Pie Chart", "Line Chart", "Scatter Plot", "Gauge Chart"], a: 1 },
           { q: "Define 'Cohort Analysis'.", opts: ["Analyzing groups with shared characteristics over time", "Comparing two companies", "Calculating daily tax", "Surveying staff"], a: 0 },
           { q: "What does ROI stand for?", opts: ["Return on Investment", "Rate of Inflation", "Risk of Insolvency", "Revenue on Operations"], a: 0 }
         ]
