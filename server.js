@@ -75,44 +75,53 @@ function broadcast(data) {
 async function startAviatorLoop() {
   try {
     const docs = await GameHistory.find({ game: 'aviator' }).sort({ timestamp: -1 }).limit(20);
-    aviatorState.history = docs ? docs.map(d => d.multiplier) : [];
+    aviatorState.history = docs.map(d => d.multiplier);
   } catch (err) {
-    aviatorState.history = [];
+    console.error("History fetch error:", err.message);
   }
 
   while (true) {
-    aviatorState.status = 'WAITING';
-    aviatorState.currentX = 1.00;
-    aviatorState.crashX = getAviatorMultiplier();
-    broadcast({ type: 'AVIATOR_STATE', ...aviatorState });
+    try {
+      aviatorState.status = 'WAITING';
+      aviatorState.currentX = 1.00;
+      aviatorState.crashX = getAviatorMultiplier();
+      broadcast({ type: 'AVIATOR_STATE', ...aviatorState });
 
-    await new Promise(r => setTimeout(r, 5000));
+      await new Promise(r => setTimeout(r, 5000));
 
-    aviatorState.status = 'FLYING';
-    let startTime = Date.now();
+      aviatorState.status = 'FLYING';
+      let startTime = Date.now();
 
-    await new Promise(resolve => {
-      const interval = setInterval(async () => {
-        let elapsed = (Date.now() - startTime) / 1000;
-        aviatorState.currentX = +(Math.pow(1.06, elapsed * 2.2)).toFixed(2);
+      await new Promise(resolve => {
+        const interval = setInterval(async () => {
+          let elapsed = (Date.now() - startTime) / 1000;
+          aviatorState.currentX = +(Math.pow(1.06, elapsed * 2.2)).toFixed(2);
 
-        if (aviatorState.currentX >= aviatorState.crashX) {
-          aviatorState.currentX = aviatorState.crashX;
-          aviatorState.status = 'CRASHED';
-          clearInterval(interval);
+          if (aviatorState.currentX >= aviatorState.crashX) {
+            aviatorState.currentX = aviatorState.crashX;
+            aviatorState.status = 'CRASHED';
+            clearInterval(interval);
 
-          try { await GameHistory.create({ game: 'aviator', multiplier: aviatorState.crashX }); } catch (e) {}
+            try { 
+              await GameHistory.create({ game: 'aviator', multiplier: aviatorState.crashX }); 
+            } catch (e) {
+              console.error("GameHistory save error:", e.message);
+            }
 
-          aviatorState.history.unshift(aviatorState.crashX);
-          if (aviatorState.history.length > 20) aviatorState.history.pop();
+            aviatorState.history.unshift(aviatorState.crashX);
+            if (aviatorState.history.length > 20) aviatorState.history.pop();
 
-          broadcast({ type: 'AVIATOR_STATE', ...aviatorState });
-          setTimeout(resolve, 2000);
-        } else {
-          broadcast({ type: 'AVIATOR_STATE', ...aviatorState });
-        }
-      }, 100);
-    });
+            broadcast({ type: 'AVIATOR_STATE', ...aviatorState });
+            setTimeout(resolve, 2000);
+          } else {
+            broadcast({ type: 'AVIATOR_STATE', ...aviatorState });
+          }
+        }, 100);
+      });
+    } catch (loopErr) {
+      console.error("Loop iteration error:", loopErr.message);
+      await new Promise(r => setTimeout(r, 2000));
+    }
   }
 }
 
@@ -120,31 +129,23 @@ async function startAviatorLoop() {
 // HTTP APIs & AUTH
 // ==========================================
 app.post('/api/login', async (req, res) => {
-  try {
-    const { username, password } = req.body;
-    const user = await User.findOne({ username });
-    if (!user || !(await bcrypt.compare(password, user.password))) {
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
-    res.json({ username: user.username, role: user.role, balance: user.balance });
-  } catch (err) {
-    res.status(500).json({ error: 'Server Login Error' });
+  const { username, password } = req.body;
+  const user = await User.findOne({ username });
+  if (!user || !(await bcrypt.compare(password, user.password))) {
+    return res.status(401).json({ error: 'Invalid credentials' });
   }
+  res.json({ username: user.username, role: user.role, balance: user.balance });
 });
 
 app.post('/api/change-password', async (req, res) => {
-  try {
-    const { username, oldPassword, newPassword } = req.body;
-    const user = await User.findOne({ username });
-    if (!user || !(await bcrypt.compare(oldPassword, user.password))) {
-      return res.status(400).json({ error: 'Old Password Incorrect!' });
-    }
-    user.password = await bcrypt.hash(newPassword, 10);
-    await user.save();
-    res.json({ success: true, message: 'Password Updated Successfully!' });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to change password' });
+  const { username, oldPassword, newPassword } = req.body;
+  const user = await User.findOne({ username });
+  if (!user || !(await bcrypt.compare(oldPassword, user.password))) {
+    return res.status(400).json({ error: 'Old Password Incorrect!' });
   }
+  user.password = await bcrypt.hash(newPassword, 10);
+  await user.save();
+  res.json({ success: true, message: 'Password Updated Successfully!' });
 });
 
 app.post('/api/admin/create-user', async (req, res) => {
@@ -159,82 +160,79 @@ app.post('/api/admin/create-user', async (req, res) => {
 });
 
 app.get('/api/admin/users', async (req, res) => {
-  try {
-    const users = await User.find({ role: 'player' });
-    res.json(users);
-  } catch (err) {
-    res.status(500).json([]);
-  }
+  const users = await User.find({ role: 'player' });
+  res.json(users);
 });
 
 app.post('/api/admin/update-balance', async (req, res) => {
-  try {
-    const { username, amount } = req.body;
-    const user = await User.findOneAndUpdate(
-      { username },
-      { $inc: { balance: amount } },
-      { new: true }
-    );
-    if (user) return res.json({ success: true, newBalance: user.balance });
-    res.status(404).json({ error: 'User not found' });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to update balance' });
-  }
+  const { username, amount } = req.body;
+  const user = await User.findOneAndUpdate(
+    { username },
+    { $inc: { balance: amount } },
+    { new: true }
+  );
+  if (user) return res.json({ success: true, newBalance: user.balance });
+  res.status(404).json({ error: 'User not found' });
 });
 
+// Atomic Instant Bet Endpoint
 app.post('/api/play-instant', async (req, res) => {
-  try {
-    const { username, game, betAmount, choice } = req.body;
-    const numBet = parseFloat(betAmount);
-    if (!numBet || numBet <= 0) return res.status(400).json({ error: 'Invalid Bet Amount' });
+  const { username, game, betAmount, choice } = req.body;
+  const numBet = parseFloat(betAmount);
+  if (isNaN(numBet) || numBet <= 0) return res.status(400).json({ error: 'Invalid Bet Amount' });
 
-    const updatedUser = await User.findOneAndUpdate(
-      { username, balance: { $gte: numBet } },
-      { $inc: { balance: -numBet, totalBetPlaced: numBet } },
+  const initialUser = await User.findOneAndUpdate(
+    { username, balance: { $gte: numBet } },
+    { $inc: { balance: -numBet, totalBetPlaced: numBet } },
+    { new: true }
+  );
+
+  if (!initialUser) return res.status(400).json({ error: 'Insufficient Balance' });
+
+  let won = false;
+  let rewardMultiplier = 0;
+  let resultMeta = {};
+
+  if (game === 'dice') {
+    const d1 = Math.floor(Math.random() * 6) + 1;
+    const d2 = Math.floor(Math.random() * 6) + 1;
+    const sum = d1 + d2;
+    const isSmall = sum >= 2 && sum <= 6;
+    if ((isSmall && choice === 'small') || (!isSmall && choice === 'big')) {
+      won = true;
+      rewardMultiplier = getGenericRewardMultiplier();
+    }
+    resultMeta = { dice1: d1, dice2: d2, sum };
+  } else if (game === 'prediction') {
+    const startVal = choice.startVal;
+    const endVal = choice.endVal;
+    const dir = choice.direction;
+    won = (dir === 'up' && endVal > startVal) || (dir === 'down' && endVal < startVal);
+    rewardMultiplier = won ? 2 : 0;
+    resultMeta = { startVal, endVal };
+  } else if (game === 'careerboot') {
+    won = choice.won;
+    rewardMultiplier = choice.multiplier || 0;
+  }
+
+  const winPayout = won ? (numBet * rewardMultiplier) : 0;
+  let finalUser;
+
+  if (winPayout > 0) {
+    finalUser = await User.findOneAndUpdate(
+      { username },
+      { $inc: { balance: winPayout, totalWon: winPayout } },
       { new: true }
     );
-
-    if (!updatedUser) return res.status(400).json({ error: 'Insufficient Balance' });
-
-    let won = false;
-    let rewardMultiplier = 0;
-    let resultMeta = {};
-
-    if (game === 'dice') {
-      const d1 = Math.floor(Math.random() * 6) + 1;
-      const d2 = Math.floor(Math.random() * 6) + 1;
-      const sum = d1 + d2;
-      const isSmall = sum >= 1 && sum <= 6;
-      if ((isSmall && choice === 'small') || (!isSmall && choice === 'big')) {
-        won = true;
-        rewardMultiplier = getGenericRewardMultiplier();
-      }
-      resultMeta = { dice1: d1, dice2: d2, sum };
-    } else if (game === 'prediction') {
-      const startVal = choice.startVal;
-      const endVal = choice.endVal;
-      const dir = choice.direction;
-      won = (dir === 'up' && endVal > startVal) || (dir === 'down' && endVal < startVal);
-      rewardMultiplier = won ? 2 : 0;
-      resultMeta = { startVal, endVal };
-    } else if (game === 'careerboot') {
-      won = choice.won;
-      rewardMultiplier = choice.multiplier || 0;
-    }
-
-    const winPayout = won ? (numBet * rewardMultiplier) : 0;
-
-    if (winPayout > 0) {
-      await User.updateOne({ username }, { $inc: { balance: winPayout, totalWon: winPayout } });
-    } else {
-      await User.updateOne({ username }, { $inc: { totalLost: numBet } });
-    }
-
-    const finalUser = await User.findOne({ username });
-    res.json({ won, rewardMultiplier, newBalance: finalUser.balance, resultMeta });
-  } catch (err) {
-    res.status(500).json({ error: 'Server Game Execution Failure' });
+  } else {
+    finalUser = await User.findOneAndUpdate(
+      { username },
+      { $inc: { totalLost: numBet } },
+      { new: true }
+    );
   }
+
+  res.json({ won, rewardMultiplier, newBalance: finalUser.balance, resultMeta });
 });
 
 // ==========================================
@@ -282,7 +280,7 @@ app.get('/', (req, res) => {
       init() { if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)(); }
       stopAll() {
         if (this.ctx && this.ctx.state !== 'closed') {
-          try { this.ctx.close(); } catch(e){}
+          this.ctx.close();
           this.ctx = null;
         }
       }
@@ -297,7 +295,7 @@ app.get('/', (req, res) => {
         osc.start(); osc.stop(this.ctx.currentTime + 0.1);
       }
       playCoinFlip() {
-        if (state.currentView !== 'guesscorrect') return;
+        if (state.currentView !== 'guesscorrect' && state.currentView !== 'careerboot') return;
         this.init();
         let osc = this.ctx.createOscillator(); let g = this.ctx.createGain();
         osc.frequency.setValueAtTime(800, this.ctx.currentTime);
@@ -373,7 +371,7 @@ app.get('/', (req, res) => {
     const CAREERBOOT_DATA = {
       'Grammar': {
         color: '#dc2626',
-        lesson: 'Grammar forms the structural foundation of professional communication. Master subject-verb agreement (e.g., "The list of items is ready"), appropriate tense consistency, and structural parallelisms. Avoid common errors like dangling modifiers ("Walking to the store, the rain started") and misusing possessive pronouns ("its" vs "it\'s"). Professional writing demands structural accuracy to convey authority and executive clarity in corporate reporting.',
+        lesson: \`Grammar forms the structural foundation of professional communication. Master subject-verb agreement, appropriate tense consistency, and structural parallelisms. Professional writing demands accuracy to convey authority in corporate reporting.\`,
         mcqs: [
           { q: "Identify the correctly punctuated sentence.", opts: ["The manager, and supervisor agreed.", "The manager and supervisor agreed.", "The manager, and supervisor, agreed.", "The manager and supervisor, agreed."], a: 1 },
           { q: "Which word correctly completes: 'Neither of the applicants ___ qualified.'", opts: ["are", "is", "were", "have"], a: 1 },
@@ -394,7 +392,7 @@ app.get('/', (req, res) => {
       },
       'Vocabulary': {
         color: '#2563eb',
-        lesson: 'Corporate vocabulary enhances your business influence and persuasiveness. Essential terms include "Synergy" (combined interaction producing greater combined impact), "Mitigate" (make less severe), "Pivot" (strategic change in direction), and "ROI" (Return on Investment). Precision in vocabulary eliminates ambiguity in stakeholder presentations, allowing technical insights to be translated seamlessly into commercial strategies.',
+        lesson: \`Corporate vocabulary enhances business influence. Essential terms include "Synergy", "Mitigate", "Pivot", and "ROI". Precision in vocabulary eliminates ambiguity in stakeholder presentations.\`,
         mcqs: [
           { q: "What does 'Mitigate' mean?", opts: ["Increase severity", "Lessen or reduce harm", "Duplicate records", "Delay execution"], a: 1 },
           { q: "Choose the synonym for 'Synergy'.", opts: ["Isolation", "Combined effectiveness", "Conflict", "Division"], a: 1 },
@@ -415,7 +413,7 @@ app.get('/', (req, res) => {
       },
       'MS Excel': {
         color: '#059669',
-        lesson: 'MS Excel is the core engine for data operations and reporting in modern retail and corporate management. Key tools include VLOOKUP/XLOOKUP for cross-table referencing, Pivot Tables for rapid multi-dimensional aggregation, and conditional logic functions like SUMIFS, COUNTIFS, and INDEX/MATCH. Master absolute ($A$1) versus relative cell references to maintain data integrity across multi-tab financial dashboards.',
+        lesson: \`MS Excel is the core engine for data operations and reporting. Master VLOOKUP/XLOOKUP, Pivot Tables, SUMIFS, and absolute references ($A$1) to maintain dashboard integrity.\`,
         mcqs: [
           { q: "Which formula searches for a value in the leftmost column of a table?", opts: ["XLOOKUP", "VLOOKUP", "HLOOKUP", "INDEX"], a: 1 },
           { q: "What symbol freezes cell references in Excel (Absolute Reference)?", opts: ["#", "$", "%", "&"], a: 1 },
@@ -436,26 +434,47 @@ app.get('/', (req, res) => {
       },
       'Business analytics': {
         color: '#d97706',
-        lesson: 'Business Analytics bridges raw datasets and commercial strategy. It leverages descriptive analytics (what happened), diagnostic analytics (why it happened), predictive analytics (what will happen), and prescriptive analytics (how to make it happen). Key performance indicators (KPIs) such as customer acquisition cost (CAC), lifetime value (LTV), churn rate, and net promoter score (NPS) guide executive decision-making.',
+        lesson: \`Business Analytics bridges datasets and strategy. Key frameworks include Descriptive, Diagnostic, Predictive, and Prescriptive analytics. Track vital KPIs like CAC, LTV, and Churn.\`,
         mcqs: [
           { q: "What type of analytics explains 'What happened in the past'?", opts: ["Predictive", "Descriptive", "Prescriptive", "Diagnostic"], a: 1 },
           { q: "What does KPI stand for?", opts: ["Key Process Integration", "Key Performance Indicator", "Known Program Insight", "Key Profit Index"], a: 1 },
           { q: "What metric tracks customer turnover/loss rate?", opts: ["Churn Rate", "Bounce Rate", "Retention Index", "LTV"], a: 0 },
           { q: "What does LTV stand for in customer analytics?", opts: ["Long Term Value", "Lifetime Value", "Last Transaction Valuation", "Lead Total Value"], a: 1 },
           { q: "Which analytics type suggests actions to take?", opts: ["Descriptive", "Diagnostic", "Predictive", "Prescriptive"], a: 3 },
-          { q: "What is A/B Testing?", opts: ["Testing two versions to see which performs better", "Auditing financials twice", "Backing up databases A and B", "Comparing 2 employees"], a: 0 },
+          { q: "What is A/B Testing?", opts: ["Testing two versions to see performance", "Auditing financials twice", "Backing up databases", "Comparing 2 employees"], a: 0 },
           { q: "What does CAC stand for?", opts: ["Customer Acquisition Cost", "Company Audit Capital", "Current Asset Calculation", "Cost Analytics Center"], a: 0 },
-          { q: "What does a correlation value of +1 indicate?", opts: ["No relationship", "Perfect inverse relationship", "Perfect positive linear relationship", "Data error"], a: 2 },
-          { q: "What is data cleaning?", opts: ["Deleting all database rows", "Fixing corrupt/inaccurate data records", "Formatting fonts", "Exporting to PDF"], a: 1 },
+          { q: "What does a correlation value of +1 indicate?", opts: ["No relationship", "Inverse relationship", "Perfect positive linear relationship", "Data error"], a: 2 },
+          { q: "What is data cleaning?", opts: ["Deleting database rows", "Fixing corrupt data records", "Formatting fonts", "Exporting to PDF"], a: 1 },
           { q: "Which metric measures customer willingness to recommend?", opts: ["ROI", "NPS (Net Promoter Score)", "CTR", "CPM"], a: 1 },
-          { q: "What is an outlier in a dataset?", opts: ["The average value", "A data point significantly different from others", "The median value", "A missing value"], a: 1 },
-          { q: "What does Data Mining involve?", opts: ["Physical hardware extraction", "Discovering patterns in large datasets", "Writing SQL queries only", "Deleting old logs"], a: 1 },
+          { q: "What is an outlier in a dataset?", opts: ["Average value", "Data point significantly different from others", "Median value", "Missing value"], a: 1 },
+          { q: "What does Data Mining involve?", opts: ["Hardware extraction", "Discovering patterns in large datasets", "Writing SQL queries only", "Deleting logs"], a: 1 },
           { q: "What chart type best shows trends over time?", opts: ["Pie Chart", "Line Chart", "Scatter Plot", "Gauge Chart"], a: 1 },
           { q: "Define 'Cohort Analysis'.", opts: ["Analyzing groups with shared characteristics over time", "Comparing two companies", "Calculating daily tax", "Surveying staff"], a: 0 },
           { q: "What does ROI stand for?", opts: ["Return on Investment", "Rate of Inflation", "Risk of Insolvency", "Revenue on Operations"], a: 0 }
         ]
       }
     };
+
+    function drawRoundedRect(ctx, x, y, width, height, radius, fillStyle, textColor, text) {
+      ctx.fillStyle = fillStyle;
+      ctx.beginPath();
+      ctx.moveTo(x + radius, y);
+      ctx.lineTo(x + width - radius, y);
+      ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+      ctx.lineTo(x + width, y + height - radius);
+      ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+      ctx.lineTo(x + radius, y + height);
+      ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+      ctx.lineTo(x, y + radius);
+      ctx.quadraticCurveTo(x, y, x + radius, y);
+      ctx.closePath();
+      ctx.fill();
+
+      if (text) {
+        ctx.fillStyle = textColor;
+        ctx.fillText(text, x + 6, y + 13);
+      }
+    }
 
     function switchView(targetView) {
       if (['lobby', 'login', 'admin', 'pwchange'].includes(targetView)) {
@@ -465,35 +484,26 @@ app.get('/', (req, res) => {
       render();
     }
 
-    let ws;
-    function connectWS() {
-      try {
-        ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host);
-        ws.onmessage = (e) => {
-          try {
-            const data = JSON.parse(e.data);
-            if (data.type === 'AVIATOR_STATE') {
-              state.aviator = data;
-              if (data.status === 'WAITING') {
-                if (state.nextRoundBet) {
-                  state.hasBetAviator = true;
-                  state.nextRoundBet = false;
-                }
-                state.cashedOut = false;
-              }
-              if (data.status === 'FLYING' && !state.cashedOut) sound.playFly();
-              if (data.status === 'CRASHED' && state.hasBetAviator && !state.cashedOut) {
-                sound.playLoss();
-                state.hasBetAviator = false;
-              }
-              if (state.currentView === 'aviator') renderAviatorOverlay();
-            }
-          } catch(err){}
-        };
-        ws.onclose = () => setTimeout(connectWS, 2000);
-      } catch(err){}
-    }
-    connectWS();
+    const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host);
+    ws.onmessage = (e) => {
+      const data = JSON.parse(e.data);
+      if (data.type === 'AVIATOR_STATE') {
+        state.aviator = data;
+        if (data.status === 'WAITING') {
+          if (state.nextRoundBet) {
+            state.hasBetAviator = true;
+            state.nextRoundBet = false;
+          }
+          state.cashedOut = false;
+        }
+        if (data.status === 'FLYING' && !state.cashedOut) sound.playFly();
+        if (data.status === 'CRASHED' && state.hasBetAviator && !state.cashedOut) {
+          sound.playLoss();
+          state.hasBetAviator = false;
+        }
+        if (state.currentView === 'aviator') renderAviatorOverlay();
+      }
+    };
 
     function showPopup(title, btnText, onConfirm = null) {
       state.popup = { title, btnText, onConfirm };
@@ -507,8 +517,8 @@ app.get('/', (req, res) => {
 
     async function handleLogin() {
       sound.init();
-      const u = document.getElementById('u')?.value || '';
-      const p = document.getElementById('p')?.value || '';
+      const u = document.getElementById('u').value;
+      const p = document.getElementById('p').value;
       try {
         const res = await fetch('/api/login', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -524,14 +534,13 @@ app.get('/', (req, res) => {
       } catch(e) {
         showPopup('Connection Error', 'Try again');
       }
+      render();
     }
 
     async function fetchAdminUsers() {
-      try {
-        const res = await fetch('/api/admin/users');
-        if (res.ok) state.adminUsers = await res.json();
-        render();
-      } catch(e){}
+      const res = await fetch('/api/admin/users');
+      if (res.ok) state.adminUsers = await res.json();
+      render();
     }
 
     function checkLoginInputsDirectly() {
@@ -577,6 +586,7 @@ app.get('/', (req, res) => {
       \`;
     }
 
+    // --- GAME 1: AVIATOR ---
     async function handleAviatorAction() {
       sound.init();
       if (state.aviator.status === 'WAITING' && !state.hasBetAviator) {
@@ -604,10 +614,11 @@ app.get('/', (req, res) => {
       const cvs = document.getElementById('aviator-canvas');
       if(!cvs) return;
       const ctx = cvs.getContext('2d');
-      const w = cvs.width = cvs.clientWidth || 300;
-      const h = cvs.height = cvs.clientHeight || 200;
+      const w = cvs.width = cvs.clientWidth;
+      const h = cvs.height = cvs.clientHeight;
 
       ctx.clearRect(0, 0, w, h);
+      
       ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 1;
       for(let x=0; x<w; x+=30) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke(); }
       for(let y=0; y<h; y+=30) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); }
@@ -693,6 +704,7 @@ app.get('/', (req, res) => {
       }
     }
 
+    // --- GAME 2: GUESS CORRECT (DICE) ---
     async function playDiceGame(choice) {
       sound.init();
       if(state.user.balance < state.userBet) return showPopup("Insufficient Balance!", "OK");
@@ -705,41 +717,36 @@ app.get('/', (req, res) => {
         render();
       }, 100);
 
-      try {
-        const res = await fetch('/api/play-instant', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username: state.user.username, game: 'dice', betAmount: state.userBet, choice })
-        });
-        const data = await res.json();
+      const res = await fetch('/api/play-instant', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: state.user.username, game: 'dice', betAmount: state.userBet, choice })
+      });
+      const data = await res.json();
 
-        setTimeout(() => {
-          clearInterval(animInterval);
-          state.diceRolling = false;
-          if (res.ok) {
-            state.diceResults = [data.resultMeta.dice1, data.resultMeta.dice2];
-            state.user.balance = data.newBalance;
-            render();
-            
-            setTimeout(() => {
-              if (data.won) {
-                sound.playWin();
-                showPopup(\`MATCHED! Sum is \${data.resultMeta.sum}. WON ₹\${(state.userBet * data.rewardMultiplier).toFixed(2)} (\${data.rewardMultiplier}x)!\`, 'Paisa hi Paisa');
-              } else {
-                sound.playLoss();
-                showPopup(\`MISMATCH! Sum is \${data.resultMeta.sum}. YOU LOST!\`, 'Try Again');
-              }
-            }, 500);
-          } else {
-            showPopup(data.error || 'Error', 'OK');
-          }
-        }, 1500);
-      } catch(e) {
+      setTimeout(() => {
         clearInterval(animInterval);
         state.diceRolling = false;
-        showPopup('Request Failed', 'OK');
-      }
+        if (res.ok) {
+          state.diceResults = [data.resultMeta.dice1, data.resultMeta.dice2];
+          state.user.balance = data.newBalance;
+          render();
+          
+          setTimeout(() => {
+            if (data.won) {
+              sound.playWin();
+              showPopup(\`MATCHED! Sum is \${data.resultMeta.sum}. WON ₹\${(state.userBet * data.rewardMultiplier).toFixed(2)} (\${data.rewardMultiplier}x)!\`, 'Paisa hi Paisa');
+            } else {
+              sound.playLoss();
+              showPopup(\`MISMATCH! Sum is \${data.resultMeta.sum}. YOU LOST!\`, 'Try Again');
+            }
+          }, 500);
+        } else {
+          showPopup(data.error || 'Error', 'OK');
+        }
+      }, 1500);
     }
 
+    // --- GAME 3: PREDICTION GRAPH ---
     async function playPrediction(dir) {
       sound.init();
       if(state.user.balance < state.userBet) return showPopup("Insufficient Balance!", "OK");
@@ -766,44 +773,41 @@ app.get('/', (req, res) => {
       state.predictionMark2 = endVal;
       render();
 
-      try {
-        const res = await fetch('/api/play-instant', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username: state.user.username, game: 'prediction', betAmount: state.userBet, choice: { startVal, endVal, direction: dir } })
-        });
-        const data = await res.json();
+      const res = await fetch('/api/play-instant', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: state.user.username, game: 'prediction', betAmount: state.userBet, choice: { startVal, endVal, direction: dir } })
+      });
+      const data = await res.json();
 
-        setTimeout(() => {
-          if (res.ok) {
-            state.user.balance = data.newBalance;
-            if (data.won) {
-              sound.playWin();
-              showPopup(\`SUCCESS! Entry: ₹\${startVal} | Exit: ₹\${endVal}. WON ₹\${(state.userBet * 2).toFixed(2)}!\`, 'Paisa hi Paisa', () => {
-                state.predictionMark1 = null; state.predictionMark2 = null;
-              });
-            } else {
-              sound.playLoss();
-              showPopup(\`FAILED! Entry: ₹\${startVal} | Exit: ₹\${endVal}. YOU LOST!\`, 'Try Again', () => {
-                state.predictionMark1 = null; state.predictionMark2 = null;
-              });
-            }
+      setTimeout(() => {
+        if (res.ok) {
+          state.user.balance = data.newBalance;
+          if (data.won) {
+            sound.playWin();
+            showPopup(\`SUCCESS! Entry: ₹\${startVal} | Exit: ₹\${endVal}. WON ₹\${(state.userBet * 2).toFixed(2)}!\`, 'Paisa hi Paisa', () => {
+              state.predictionMark1 = null; state.predictionMark2 = null;
+            });
           } else {
-            showPopup(data.error || 'Error', 'OK');
-            state.predictionMark1 = null; state.predictionMark2 = null;
+            sound.playLoss();
+            showPopup(\`FAILED! Entry: ₹\${startVal} | Exit: ₹\${endVal}. YOU LOST!\`, 'Try Again', () => {
+              state.predictionMark1 = null; state.predictionMark2 = null;
+            });
           }
-          render();
-        }, 1000);
-      } catch(e) {
-        showPopup('Prediction Execution Error', 'OK');
-      }
+        } else {
+          showPopup(data.error || 'Error', 'OK');
+          state.predictionMark1 = null; state.predictionMark2 = null;
+        }
+        render();
+      }, 1000);
     }
 
+    // --- GAME 4: CAREERBOOT ENGINE ---
     function renderCareerBootWheelCanvas() {
       const cvs = document.getElementById('cb-wheel-canvas');
       if (!cvs) return;
       const ctx = cvs.getContext('2d');
-      const w = cvs.width = cvs.clientWidth || 250;
-      const h = cvs.height = cvs.clientHeight || 250;
+      const w = cvs.width = cvs.clientWidth;
+      const h = cvs.height = cvs.clientHeight;
       const r = Math.min(w, h) / 2 - 10;
       const cx = w / 2;
       const cy = h / 2;
@@ -968,8 +972,8 @@ app.get('/', (req, res) => {
       const cvs = document.getElementById('market-canvas');
       if(!cvs) return;
       const ctx = cvs.getContext('2d');
-      const w = cvs.width = cvs.clientWidth || 300;
-      const h = cvs.height = cvs.clientHeight || 200;
+      const w = cvs.width = cvs.clientWidth;
+      const h = cvs.height = cvs.clientHeight;
 
       ctx.clearRect(0, 0, w, h);
       
@@ -1038,14 +1042,7 @@ app.get('/', (req, res) => {
       ctx.fillStyle = '#ffffff';
       ctx.fill();
 
-      ctx.fillStyle = '#22c55e';
-      ctx.beginPath();
-      if (ctx.roundRect) ctx.roundRect(lastX - 68, lastY - 26, 62, 20, 6);
-      else ctx.rect(lastX - 68, lastY - 26, 62, 20);
-      ctx.fill();
-      ctx.fillStyle = '#000000';
-      ctx.font = 'black 11px monospace';
-      ctx.fillText('₹' + lastVal, lastX - 58, lastY - 12);
+      drawRoundedRect(ctx, lastX - 68, lastY - 26, 62, 20, 6, '#22c55e', '#000000', '₹' + lastVal);
 
       if (state.predictionMark1) {
         let y1 = h - ((state.predictionMark1 - minVal) / range) * (h - 30) - 15;
@@ -1060,14 +1057,7 @@ app.get('/', (req, res) => {
         ctx.setLineDash([]);
         ctx.shadowBlur = 0;
 
-        ctx.fillStyle = '#eab308';
-        ctx.beginPath();
-        if (ctx.roundRect) ctx.roundRect(8, y1 - 20, 100, 18, 4);
-        else ctx.rect(8, y1 - 20, 100, 18);
-        ctx.fill();
-        ctx.fillStyle = '#000000';
-        ctx.font = 'bold 10px sans-serif';
-        ctx.fillText('ENTRY: ₹' + state.predictionMark1, 14, y1 - 7);
+        drawRoundedRect(ctx, 8, y1 - 20, 100, 18, 4, '#eab308', '#000000', 'ENTRY: ₹' + state.predictionMark1);
       }
 
       if (state.predictionMark2) {
@@ -1083,14 +1073,7 @@ app.get('/', (req, res) => {
         ctx.setLineDash([]);
         ctx.shadowBlur = 0;
 
-        ctx.fillStyle = '#06b6d4';
-        ctx.beginPath();
-        if (ctx.roundRect) ctx.roundRect(w - 108, y2 - 20, 100, 18, 4);
-        else ctx.rect(w - 108, y2 - 20, 100, 18);
-        ctx.fill();
-        ctx.fillStyle = '#000000';
-        ctx.font = 'bold 10px sans-serif';
-        ctx.fillText('EXIT: ₹' + state.predictionMark2, w - 102, y2 - 7);
+        drawRoundedRect(ctx, w - 108, y2 - 20, 100, 18, 4, '#06b6d4', '#000000', 'EXIT: ₹' + state.predictionMark2);
       }
     }
 
@@ -1099,7 +1082,6 @@ app.get('/', (req, res) => {
     // ==========================================
     function render() {
       const app = document.getElementById('app');
-      if (!app) return;
       let html = '';
 
       let popupHtml = '';
@@ -1145,7 +1127,7 @@ app.get('/', (req, res) => {
               <div class="flex items-center gap-2">
                 <div class="bg-black/60 px-3 py-1.5 rounded-full border border-amber-500/40">
                   <span class="text-xs text-amber-300 font-bold">₹</span>
-                  <span class="text-sm font-mono font-bold text-green-400">\${state.user ? state.user.balance.toFixed(2) : '0.00'}</span>
+                  <span class="text-sm font-mono font-bold text-green-400">\${state.user.balance.toFixed(2)}</span>
                 </div>
                 <button onclick="switchView('pwchange')" class="px-2.5 py-1 bg-amber-600/30 border border-amber-500/50 rounded-lg text-[10px] font-bold text-amber-300">Password</button>
                 <button onclick="switchView('login')" class="px-2.5 py-1 bg-red-900/50 border border-red-500/50 rounded-lg text-[10px] font-bold text-red-300">Logout</button>
@@ -1179,7 +1161,7 @@ app.get('/', (req, res) => {
               <div class="h-14 px-3 bg-red-950 border-b border-amber-500/40 flex items-center justify-between">
                 <button onclick="switchView('lobby')" class="px-3 py-1 bg-red-900 border border-amber-500/40 rounded-xl text-xs font-bold text-white">Lobby</button>
                 <span class="font-black gold-text">CAREERBOOT WHEEL</span>
-                <span class="font-mono text-sm text-green-400 font-bold">₹\${state.user ? state.user.balance.toFixed(2) : '0.00'}</span>
+                <span class="font-mono text-sm text-green-400 font-bold">₹\${state.user.balance.toFixed(2)}</span>
               </div>
               <div class="flex-1 flex flex-col items-center justify-center p-4 space-y-4">
                 <div class="relative w-72 h-72 flex items-center justify-center">
@@ -1199,7 +1181,7 @@ app.get('/', (req, res) => {
               <div class="h-14 px-3 bg-red-950 border-b border-amber-500/40 flex items-center justify-between shrink-0">
                 <button onclick="state.careerboot.stage='WHEEL'; render();" class="px-3 py-1 bg-red-900 border border-amber-500/40 rounded-xl text-xs font-bold text-white">Wheel</button>
                 <span class="font-black gold-text uppercase">\${cb.selectedSlice} MODULE</span>
-                <span class="font-mono text-sm text-green-400 font-bold">₹\${state.user ? state.user.balance.toFixed(2) : '0.00'}</span>
+                <span class="font-mono text-sm text-green-400 font-bold">₹\${state.user.balance.toFixed(2)}</span>
               </div>
               <div class="flex-1 p-5 overflow-y-auto space-y-4">
                 <div class="tomato-card p-6 rounded-3xl space-y-3">
@@ -1237,14 +1219,14 @@ app.get('/', (req, res) => {
               </div>
               <div class="flex-1 p-5 flex flex-col justify-between overflow-y-auto">
                 <div class="tomato-card p-6 rounded-3xl space-y-4">
-                  <h3 class="text-base font-bold text-amber-300 leading-snug">\${qObj ? qObj.q : ''}</h3>
+                  <h3 class="text-base font-bold text-amber-300 leading-snug">\${qObj.q}</h3>
                 </div>
                 <div class="space-y-3 my-4">
-                  \${qObj ? qObj.opts.map((opt, idx) => \`
+                  \${qObj.opts.map((opt, idx) => \`
                     <button onclick="handleCareerBootAnswer(\${idx})" class="w-full p-4 rounded-2xl bg-black/70 border border-amber-500/40 text-left text-sm font-semibold text-white active:bg-amber-500 active:text-black transition-all shadow-md">
                       <span class="text-amber-400 font-black mr-2">\${['A','B','C','D'][idx]}.</span> \${opt}
                     </button>
-                  \`).join('') : ''}
+                  \`).join('')}
                 </div>
               </div>
             </div>
@@ -1274,7 +1256,7 @@ app.get('/', (req, res) => {
             <div class="h-14 px-3 bg-[#141822] border-b border-gray-800 flex items-center justify-between shrink-0">
               <button onclick="switchView('lobby')" class="px-3 py-1 bg-red-900/80 border border-red-500/50 rounded-xl text-xs font-bold text-white">Lobby</button>
               <span class="font-black text-amber-400 text-sm tracking-wider">AVIATOR 24x7</span>
-              <span class="font-mono text-sm text-green-400 font-bold">₹\${state.user ? state.user.balance.toFixed(2) : '0.00'}</span>
+              <span class="font-mono text-sm text-green-400 font-bold">₹\${state.user.balance.toFixed(2)}</span>
             </div>
             <div class="h-10 px-2 bg-black/60 border-b border-gray-800/80 flex items-center gap-1.5 overflow-x-auto shrink-0 no-scrollbar">
               \${state.aviator.history.slice(0, 20).map(h => \`<span class="px-2.5 py-0.5 text-[11px] font-mono font-bold rounded-full bg-gray-800 text-purple-300 border border-purple-500/30 shrink-0">\${h}x</span>\`).join('')}
@@ -1317,7 +1299,7 @@ app.get('/', (req, res) => {
             <div class="h-14 px-3 bg-red-950 border-b border-amber-500/40 flex items-center justify-between">
               <button onclick="switchView('lobby')" class="px-3 py-1 bg-red-900 border border-amber-500/40 rounded-xl text-xs font-bold text-white">Lobby</button>
               <span class="font-black gold-text">GUESS CORRECT</span>
-              <span class="font-mono text-sm text-green-400 font-bold">₹\${state.user ? state.user.balance.toFixed(2) : '0.00'}</span>
+              <span class="font-mono text-sm text-green-400 font-bold">₹\${state.user.balance.toFixed(2)}</span>
             </div>
             <div class="flex-1 flex flex-col items-center justify-center p-6 space-y-6">
               <div class="tomato-card p-6 rounded-3xl w-full max-w-xs text-center space-y-3">
@@ -1331,7 +1313,7 @@ app.get('/', (req, res) => {
               <div class="grid grid-cols-2 gap-4 w-full max-w-xs">
                 <button onclick="playDiceGame('small')" class="tomato-card h-16 rounded-2xl flex flex-col items-center justify-center space-y-0.5 active:scale-95">
                   <span class="font-black text-lg text-amber-300">SMALL</span>
-                  <span class="text-[10px] text-amber-100/60">Sum 1 to 6</span>
+                  <span class="text-[10px] text-amber-100/60">Sum 2 to 6</span>
                 </button>
                 <button onclick="playDiceGame('big')" class="tomato-card h-16 rounded-2xl flex flex-col items-center justify-center space-y-0.5 active:scale-95">
                   <span class="font-black text-lg text-amber-300">BIG</span>
@@ -1349,7 +1331,7 @@ app.get('/', (req, res) => {
             <div class="h-14 px-3 bg-red-950 border-b border-amber-500/40 flex items-center justify-between">
               <button onclick="switchView('lobby')" class="px-3 py-1 bg-red-900/80 border border-amber-500/40 rounded-xl text-xs font-bold text-white">Lobby</button>
               <span class="font-black gold-text tracking-wider">PREDICTION PRO</span>
-              <span class="font-mono text-sm text-green-400 font-bold">₹\${state.user ? state.user.balance.toFixed(2) : '0.00'}</span>
+              <span class="font-mono text-sm text-green-400 font-bold">₹\${state.user.balance.toFixed(2)}</span>
             </div>
             <div class="flex-1 flex flex-col items-center justify-between p-3 space-y-3">
               <div class="w-full flex-1 bg-gradient-to-b from-[#090d16] to-[#04060a] border-2 border-emerald-500/30 rounded-3xl relative overflow-hidden flex flex-col p-2 min-h-[280px] shadow-[0_0_20px_rgba(16,185,129,0.15)]">
