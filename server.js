@@ -135,7 +135,7 @@ app.post('/api/login', async (req, res) => {
   if (!user || !(await bcrypt.compare(password, user.password))) {
     return res.status(401).json({ error: 'Invalid credentials' });
   }
-  res.json({ username: user.username, role: user.role, balance: user.balance, seenQuestions: user.seenQuestions });
+  res.json({ username: user.username, role: user.role, balance: user.balance, seenQuestions: user.seenQuestions || [] });
 });
 
 app.post('/api/change-password', async (req, res) => {
@@ -214,6 +214,7 @@ app.post('/api/play-instant', async (req, res) => {
     won = choice.won;
     rewardMultiplier = choice.multiplier || 0;
     
+    // PERMANENT FIX: Save only unique asked question IDs using $addToSet
     if (choice.askedQuestionIds && Array.isArray(choice.askedQuestionIds)) {
       await User.findOneAndUpdate(
         { username },
@@ -239,7 +240,7 @@ app.post('/api/play-instant', async (req, res) => {
     );
   }
 
-  res.json({ won, rewardMultiplier, newBalance: finalUser.balance, resultMeta });
+  res.json({ won, rewardMultiplier, newBalance: finalUser.balance, seenQuestions: finalUser.seenQuestions, resultMeta });
 });
 
 // ==========================================
@@ -852,7 +853,6 @@ app.get('/', (req, res) => {
     }
 
     // --- GAME 4: CAREERBOOT ENGINE ---
-    // UPDATED & FIXED WHEEL RENDERER WITH CURVED/TANGENTIAL WORD ALIGNMENT
     function renderCareerBootWheelCanvas() {
       const cvs = document.getElementById('cb-wheel-canvas');
       if (!cvs) return;
@@ -883,7 +883,6 @@ app.get('/', (req, res) => {
         const sliceStartAngle = i * arc;
         const sliceEndAngle = sliceStartAngle + arc;
 
-        // Draw Slice Sector
         ctx.beginPath();
         ctx.fillStyle = CAREERBOOT_DATA[sliceKey].color;
         ctx.moveTo(0, 0);
@@ -891,12 +890,10 @@ app.get('/', (req, res) => {
         ctx.lineTo(0, 0);
         ctx.fill();
 
-        // Slice Border
         ctx.strokeStyle = '#d4af37';
         ctx.lineWidth = 3;
         ctx.stroke();
 
-        // Perfectly Aligned Curved Text Along Sector Arc
         const labelText = sliceKey.toUpperCase();
         const textRadius = r * 0.62;
         const sliceMidAngle = sliceStartAngle + arc / 2;
@@ -905,7 +902,6 @@ app.get('/', (req, res) => {
         ctx.font = \`900 \${fontSize}px ui-sans-serif, system-ui, sans-serif\`;
         let totalWidth = ctx.measureText(labelText).width;
         
-        // Auto-scale font size if label exceeds slice arc width
         const maxAllowedArcWidth = textRadius * arc * 0.82;
         if (totalWidth > maxAllowedArcWidth) {
           fontSize = Math.floor(fontSize * (maxAllowedArcWidth / totalWidth));
@@ -939,7 +935,6 @@ app.get('/', (req, res) => {
 
       ctx.restore();
 
-      // Outer Pin Indicator
       ctx.fillStyle = '#fcf6ba';
       ctx.beginPath();
       ctx.moveTo(cx - 12, cy - r - 6);
@@ -995,6 +990,7 @@ app.get('/', (req, res) => {
       requestAnimationFrame(animateSpin);
     }
 
+    // PERMANENT FIX: Guarantees unique questions by filtering unseen pool first
     function startCareerBootMCQs() {
       const sliceObj = CAREERBOOT_DATA[state.careerboot.selectedSlice];
       state.careerboot.round = 1;
@@ -1006,13 +1002,26 @@ app.get('/', (req, res) => {
 
       const seenSet = new Set(state.user.seenQuestions || []);
       
+      // Strictly exclude any question already seen by this user
       let availableMCQs = sliceObj.mcqs.filter(m => !seenSet.has(m.id));
 
+      // Exhaustion Fallback: If player answered all 3,750 questions in this category, reset their seen history for this category
       if (availableMCQs.length < 15) {
+        const catPrefixes = { 'Grammar': 'GMR_', 'Vocabulary': 'VOC_', 'MS Excel': 'EXC_', 'Business analytics': 'BSA_' };
+        const prefix = catPrefixes[state.careerboot.selectedSlice];
+        if (prefix) {
+          state.user.seenQuestions = (state.user.seenQuestions || []).filter(id => !id.startsWith(prefix));
+        }
         availableMCQs = [...sliceObj.mcqs];
       }
 
-      const shuffled = [...availableMCQs].sort(() => 0.5 - Math.random());
+      // Shuffle using Fisher-Yates and select 15 strictly unasked questions
+      const shuffled = [...availableMCQs];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+
       state.careerboot.activeQuestions = shuffled.slice(0, 15);
       state.careerboot.askedQuestionIdsThisGame = state.careerboot.activeQuestions.map(q => q.id);
 
@@ -1066,8 +1075,7 @@ app.get('/', (req, res) => {
               const data = await res.json();
               if (res.ok) {
                 state.user.balance = data.newBalance;
-                if(!state.user.seenQuestions) state.user.seenQuestions = [];
-                state.user.seenQuestions.push(...state.careerboot.askedQuestionIdsThisGame);
+                state.user.seenQuestions = data.seenQuestions || [];
               }
 
               sound.playWin();
@@ -1097,8 +1105,7 @@ app.get('/', (req, res) => {
         const data = await res.json();
         if (res.ok) {
           state.user.balance = data.newBalance;
-          if(!state.user.seenQuestions) state.user.seenQuestions = [];
-          state.user.seenQuestions.push(...state.careerboot.askedQuestionIdsThisGame);
+          state.user.seenQuestions = data.seenQuestions || [];
         }
 
         setTimeout(() => {
