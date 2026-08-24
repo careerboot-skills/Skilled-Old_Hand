@@ -1845,32 +1845,149 @@ app.get('/', (req, res) => {
 });
 
 // ==========================================
-// SERVER INITIALIZATION ENGINE
+// SERVER INITIALIZATION ENGINE - DEPLOYMENT SAFE
 // ==========================================
-const PORT = process.env.PORT || 10000;
+
+const PORT = Number(process.env.PORT) || 10000;
 const MONGO_URI = process.env.MONGODB_URI;
 
-async function startServer() {
+let mongoReady = false;
+let aviatorStarted = false;
+
+// ------------------------------------------
+// HEALTH CHECK
+// ------------------------------------------
+server.get('/health', (req, res) => {
+  res.status(200).json({
+    ok: true,
+    server: 'online',
+    database: mongoReady ? 'connected' : 'connecting',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// ------------------------------------------
+// GLOBAL ERROR PROTECTION
+// ------------------------------------------
+process.on('unhandledRejection', (reason) => {
+  console.error('UNHANDLED PROMISE REJECTION:', reason);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('UNCAUGHT EXCEPTION:', err);
+});
+
+// ------------------------------------------
+// START HTTP SERVER FIRST
+// ------------------------------------------
+// This is important for Render/Railway/Vercel-style
+// deployment environments. The port must be opened
+// even if MongoDB takes time to connect.
+server.listen(PORT, () => {
+  console.log(`Casino Server active on port ${PORT}`);
+  console.log(`Health check: /health`);
+});
+
+// ------------------------------------------
+// DATABASE CONNECTION
+// ------------------------------------------
+async function connectDatabase() {
   if (!MONGO_URI) {
-    console.error("CRITICAL ERROR: MONGODB_URI environment variable missing!");
-    process.exit(1);
+    console.error(
+      'CRITICAL ERROR: MONGODB_URI environment variable is missing.'
+    );
+
+    console.error(
+      'The web server is still running, but database features are unavailable.'
+    );
+
+    return false;
   }
+
   try {
-    await mongoose.connect(MONGO_URI, { serverSelectionTimeoutMS: 5000 });
-    console.log("MongoDB Connected Successfully");
-    
+    console.log('Connecting to MongoDB...');
+
+    await mongoose.connect(MONGO_URI, {
+      serverSelectionTimeoutMS: 10000,
+      connectTimeoutMS: 10000
+    });
+
+    mongoReady = true;
+
+    console.log('MongoDB Connected Successfully');
+
+    // ----------------------------------------
+    // CREATE DEFAULT ADMIN IF NEEDED
+    // ----------------------------------------
     const boss = await User.findOne({ username: 'Boss' });
+
     if (!boss) {
       const hashedPassword = await bcrypt.hash('BigBoss', 10);
-      await User.create({ username: 'Boss', password: hashedPassword, role: 'admin', balance: 999999 });
-      console.log("Default Admin Account Created: Boss / BigBoss");
+
+      await User.create({
+        username: 'Boss',
+        password: hashedPassword,
+        role: 'admin',
+        balance: 999999
+      });
+
+      console.log('Default Admin Account Created: Boss / BigBoss');
     }
 
-    server.listen(PORT, () => console.log(`Casino Server active on port ${PORT}`));
-    startAviatorLoop();
+    // ----------------------------------------
+    // START AVIATOR ONLY ONCE
+    // ----------------------------------------
+    if (!aviatorStarted) {
+      aviatorStarted = true;
+
+      try {
+        startAviatorLoop();
+        console.log('Aviator engine started successfully');
+      } catch (aviatorError) {
+        console.error(
+          'Aviator engine failed to start:',
+          aviatorError
+        );
+      }
+    }
+
+    return true;
+
   } catch (err) {
-    console.error("Database connection failure:", err.message);
+    mongoReady = false;
+
+    console.error(
+      'MongoDB connection failure:',
+      err && err.message ? err.message : err
+    );
+
+    console.error(
+      'Server remains online. Database-dependent features are unavailable.'
+    );
+
+    return false;
   }
 }
 
-startServer();
+// ------------------------------------------
+// MONGOOSE CONNECTION EVENTS
+// ------------------------------------------
+mongoose.connection.on('connected', () => {
+  mongoReady = true;
+  console.log('MongoDB connection state: connected');
+});
+
+mongoose.connection.on('disconnected', () => {
+  mongoReady = false;
+  console.warn('MongoDB connection state: disconnected');
+});
+
+mongoose.connection.on('error', (err) => {
+  mongoReady = false;
+  console.error('MongoDB connection error:', err.message);
+});
+
+// ------------------------------------------
+// CONNECT DATABASE
+// ------------------------------------------
+connectDatabase();
