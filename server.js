@@ -238,6 +238,7 @@ app.post('/api/play-instant', async (req, res) => {
 // EMBEDDED FRONTEND ENGINE
 // ==========================================
 app.get('/', (req, res) => {
+  res.setHeader('Content-Type', 'text/html');
   res.send(`
 <!DOCTYPE html>
 <html lang="hi">
@@ -458,7 +459,7 @@ app.get('/', (req, res) => {
             <h3 class="text-base font-bold text-amber-300 border-b border-amber-500/30 pb-1 mt-4">CHAPTER 2: Data Aggregation & Summarization</h3>
             <p><strong>4. Pivot Tables:</strong> Pivot Tables rapidly aggregate, summarize, and cross-tabulate large datasets without writing complex formulas.</p>
             <p><strong>5. Conditional Functions:</strong> COUNTIF counts cells matching a single condition, while AVERAGEIFS calculates average values meeting multiple criteria.</p>
-            <p><strong>6. Logical Statements:</strong> The IF function evaluates expressions (`=IF(5>3, 'Yes', 'No')` returns 'Yes').</p>
+            <p><strong>6. Logical Statements:</strong> The IF function evaluates expressions (\`=IF(5>3, 'Yes', 'No')\` returns 'Yes').</p>
 
             <h3 class="text-base font-bold text-amber-300 border-b border-amber-500/30 pb-1 mt-4">CHAPTER 3: Error Handling & Text Formatting</h3>
             <p><strong>7. Error Codes:</strong> #N/A indicates a value is not available. #DIV/0! signifies division by zero.</p>
@@ -977,7 +978,6 @@ app.get('/', (req, res) => {
       state.careerboot.selectedAnswer = null;
       state.careerboot.isAnswered = false;
 
-      // Unique non-repeating questions shuffle algorithm
       const shuffled = [...sliceObj.mcqs].sort(() => 0.5 - Math.random());
       state.careerboot.activeQuestions = shuffled.slice(0, 15);
 
