@@ -214,7 +214,7 @@ app.post('/api/play-instant', async (req, res) => {
     won = choice.won;
     rewardMultiplier = choice.multiplier || 0;
     
-    // PERMANENT FIX: Save only unique asked question IDs using $addToSet
+    // Save only unique asked question IDs using $addToSet
     if (choice.askedQuestionIds && Array.isArray(choice.askedQuestionIds)) {
       await User.findOneAndUpdate(
         { username },
@@ -990,7 +990,6 @@ app.get('/', (req, res) => {
       requestAnimationFrame(animateSpin);
     }
 
-    // PERMANENT FIX: Guarantees unique questions by filtering unseen pool first
     function startCareerBootMCQs() {
       const sliceObj = CAREERBOOT_DATA[state.careerboot.selectedSlice];
       state.careerboot.round = 1;
@@ -1002,10 +1001,8 @@ app.get('/', (req, res) => {
 
       const seenSet = new Set(state.user.seenQuestions || []);
       
-      // Strictly exclude any question already seen by this user
       let availableMCQs = sliceObj.mcqs.filter(m => !seenSet.has(m.id));
 
-      // Exhaustion Fallback: If player answered all 3,750 questions in this category, reset their seen history for this category
       if (availableMCQs.length < 15) {
         const catPrefixes = { 'Grammar': 'GMR_', 'Vocabulary': 'VOC_', 'MS Excel': 'EXC_', 'Business analytics': 'BSA_' };
         const prefix = catPrefixes[state.careerboot.selectedSlice];
@@ -1015,7 +1012,6 @@ app.get('/', (req, res) => {
         availableMCQs = [...sliceObj.mcqs];
       }
 
-      // Shuffle using Fisher-Yates and select 15 strictly unasked questions
       const shuffled = [...availableMCQs];
       for (let i = shuffled.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
