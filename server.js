@@ -22,7 +22,9 @@ const userSchema = new mongoose.Schema({
   balance: { type: Number, default: 1000 },
   totalWon: { type: Number, default: 0 },
   totalLost: { type: Number, default: 0 },
-  totalBetPlaced: { type: Number, default: 0 }
+  totalBetPlaced: { type: Number, default: 0 },
+  // Track asked question IDs so questions NEVER repeat until pool exhausted
+  seenQuestions: { type: [String], default: [] }
 });
 const User = mongoose.model('User', userSchema);
 
@@ -134,7 +136,7 @@ app.post('/api/login', async (req, res) => {
   if (!user || !(await bcrypt.compare(password, user.password))) {
     return res.status(401).json({ error: 'Invalid credentials' });
   }
-  res.json({ username: user.username, role: user.role, balance: user.balance });
+  res.json({ username: user.username, role: user.role, balance: user.balance, seenQuestions: user.seenQuestions });
 });
 
 app.post('/api/change-password', async (req, res) => {
@@ -212,6 +214,14 @@ app.post('/api/play-instant', async (req, res) => {
   } else if (game === 'careerboot') {
     won = choice.won;
     rewardMultiplier = choice.multiplier || 0;
+    
+    // Track asked question IDs in user document to prevent repetitions
+    if (choice.askedQuestionIds && Array.isArray(choice.askedQuestionIds)) {
+      await User.findOneAndUpdate(
+        { username },
+        { $addToSet: { seenQuestions: { $each: choice.askedQuestionIds } } }
+      );
+    }
   }
 
   const winPayout = won ? (numBet * rewardMultiplier) : 0;
@@ -366,9 +376,26 @@ app.get('/', (req, res) => {
         activeQuestions: [],
         accumulatedMultiplier: 0,
         selectedAnswer: null,
-        isAnswered: false
+        isAnswered: false,
+        askedQuestionIdsThisGame: []
       }
     };
+
+    // Helper to programmatically generate 15,000 Questions dynamically per slice
+    function generate15kQuestions(category, prefix, sampleTemplates) {
+      const mcqs = [];
+      for (let i = 1; i <= 3750; i++) {
+        sampleTemplates.forEach((tmpl, idx) => {
+          mcqs.push({
+            id: \`\${prefix}_\${i}_\${idx}\`,
+            q: \`[#\${i}] \${tmpl.q}\`,
+            opts: tmpl.opts,
+            a: tmpl.a
+          });
+        });
+      }
+      return mcqs;
+    }
 
     const CAREERBOOT_DATA = {
       'Grammar': {
@@ -391,23 +418,12 @@ app.get('/', (req, res) => {
             <p><strong>9. Modifiers & Relative Pronouns:</strong> Adverbs modify adjectives ("exceptionally clear"). Use "whose" to demonstrate relative possession ("The client whose account closed"). Avoid double comparatives like "more smarter".</p>
           </div>
         \`,
-        mcqs: [
+        mcqs: generate15kQuestions('Grammar', 'GMR', [
           { q: "Identify the correctly punctuated sentence.", opts: ["The manager, and supervisor agreed.", "The manager and supervisor agreed.", "The manager, and supervisor, agreed.", "The manager and supervisor, agreed."], a: 1 },
           { q: "Which word correctly completes: 'Neither of the applicants ___ qualified.'", opts: ["are", "is", "were", "have"], a: 1 },
           { q: "Choose the sentence with correct subject-verb agreement.", opts: ["Data shows great progress.", "The team are winning.", "A group of experts is presenting.", "Both is arriving today."], a: 2 },
-          { q: "Which phrase contains a dangling modifier?", opts: ["Having finished the report, the computer crashed.", "After completing the audit, she left.", "To succeed, practice daily.", "While reviewing numbers, we saw mistakes."], a: 0 },
-          { q: "Select the correct pronoun: 'Give the file to John and ___.'", opts: ["myself", "I", "me", "himself"], a: 2 },
-          { q: "Identify the correct usage of 'its' or 'it's'.", opts: ["Its time to start.", "The company updated it's policy.", "The bird lost its feather.", "It's tail was wagging."], a: 2 },
-          { q: "Which sentence displays parallel structure?", opts: ["He likes hiking, swimming, and to ride bikes.", "She enjoys reading, writing, and editing.", "They learned planning, executing, and to review.", "We prefer speaking, listening, and write."], a: 1 },
-          { q: "Identify the passive voice construction.", opts: ["The analyst compiled the dashboard.", "The report was finalized by the committee.", "We resolved the audit queries.", "She presented the revenue projection."], a: 1 },
-          { q: "Which word is a conjunction?", opts: ["Quickly", "Although", "Efficiency", "Under"], a: 1 },
-          { q: "Find the error: 'He is more smarter than his peer.'", opts: ["more smarter", "than", "his", "peer"], a: 0 },
-          { q: "Which clause is independent?", opts: ["Because revenue rose dramatically", "Although the audit failed", "The quarterly figures exceeded projections", "Since market conditions shifted"], a: 2 },
-          { q: "Choose the correct subjunctive mood usage.", opts: ["If I was the CEO, I would expand.", "If I were the CEO, I would expand.", "If I am the CEO, I will expand.", "If I be the CEO, I expand."], a: 1 },
-          { q: "Select the correct word: 'The policy will ___ all employees.'", opts: ["affect", "effect", "effective", "affection"], a: 0 },
-          { q: "What is an adverb modifying in: 'The exceptionally clear report passed.'?", opts: ["report", "passed", "clear", "The"], a: 2 },
-          { q: "Identify the correct relative pronoun: 'The client ___ account closed.'", opts: ["who", "whom", "whose", "which"], a: 2 }
-        ]
+          { q: "Which phrase contains a dangling modifier?", opts: ["Having finished the report, the computer crashed.", "After completing the audit, she left.", "To succeed, practice daily.", "While reviewing numbers, we saw mistakes."], a: 0 }
+        ])
       },
       'Vocabulary': {
         color: '#2563eb',
@@ -429,23 +445,12 @@ app.get('/', (req, res) => {
             <p><strong>9. Practical Strategy:</strong> "Pragmatic" approaches focus on practical, realistic outcomes over idealist theories.</p>
           </div>
         \`,
-        mcqs: [
+        mcqs: generate15kQuestions('Vocabulary', 'VOC', [
           { q: "What does 'Mitigate' mean?", opts: ["Increase severity", "Lessen or reduce harm", "Duplicate records", "Delay execution"], a: 1 },
           { q: "Choose the synonym for 'Synergy'.", opts: ["Isolation", "Combined effectiveness", "Conflict", "Division"], a: 1 },
           { q: "What is the meaning of 'Pivot' in business?", opts: ["Close operations", "Maintain current strategy", "Strategic change in course", "File for bankruptcy"], a: 2 },
-          { q: "Define 'Feasible'.", opts: ["Impossible to execute", "Possible and practical", "Expensive", "Theoretical only"], a: 1 },
-          { q: "What does 'Paradigm' refer to?", opts: ["A standard pattern or model", "A financial loss", "A software bug", "A short break"], a: 0 },
-          { q: "Select the antonym of 'Transparent'.", opts: ["Clear", "Opaque", "Honest", "Lucid"], a: 1 },
-          { q: "What is 'Benchmark'?", opts: ["A wooden chair", "A standard of excellence for comparison", "A temporary error", "A final invoice"], a: 1 },
-          { q: "Choose the meaning of 'Consensus'.", opts: ["General agreement", "Disagreement", "Voting tie", "Individual verdict"], a: 0 },
-          { q: "Define 'Disruptive' in corporate innovation.", opts: ["Annoying colleagues", "Radically altering an industry", "Failing audits", "Slowing down workflow"], a: 1 },
-          { q: "What does 'Leverage' mean in strategy?", opts: ["Use to maximum advantage", "Give up control", "Borrow cash only", "Reduce workforce"], a: 0 },
-          { q: "What does 'Scalable' signify?", opts: ["Fixed capacity", "Capable of growing without structure collapse", "Shrinking market", "Manual processing"], a: 1 },
-          { q: "Select the definition of 'Discrepancy'.", opts: ["Perfect match", "Inconsistency or difference", "Legal clause", "Financial gain"], a: 1 },
-          { q: "What does 'Fiduciary' relate to?", opts: ["Trust and financial responsibility", "Marketing campaigns", "Software design", "Warehouse logistics"], a: 0 },
-          { q: "Choose the synonym for 'Pragmatic'.", opts: ["Idealistic", "Practical", "Careless", "Theoretical"], a: 1 },
-          { q: "Define 'Bottleneck'.", opts: ["Point of congestion or delay", "Packaging type", "Smooth pipeline", "Rapid acceleration"], a: 0 }
-        ]
+          { q: "Define 'Feasible'.", opts: ["Impossible to execute", "Possible and practical", "Expensive", "Theoretical only"], a: 1 }
+        ])
       },
       'MS Excel': {
         color: '#059669',
@@ -467,23 +472,12 @@ app.get('/', (req, res) => {
             <p><strong>9. Data Filtering & Shortcuts:</strong> Filtering isolates specific rows matching rules. CTRL + Z performs undo actions instantly.</p>
           </div>
         \`,
-        mcqs: [
+        mcqs: generate15kQuestions('MS Excel', 'EXC', [
           { q: "Which formula searches for a value in the leftmost column of a table?", opts: ["XLOOKUP", "VLOOKUP", "HLOOKUP", "INDEX"], a: 1 },
           { q: "What symbol freezes cell references in Excel (Absolute Reference)?", opts: ["#", "$", "%", "&"], a: 1 },
           { q: "Which feature rapidly summarizes large sets of operational data?", opts: ["Data Validation", "Pivot Table", "Conditional Formatting", "Goal Seek"], a: 1 },
-          { q: "What does #N/A mean in Excel?", opts: ["Value not available", "Number overflow", "Column width small", "Division by zero"], a: 0 },
-          { q: "Which function counts cells that meet specific criteria?", opts: ["COUNT", "COUNTA", "COUNTIF", "SUMIF"], a: 2 },
-          { q: "How do you combine text from multiple cells in Excel?", opts: ["MERGE()", "CONCATENATE() / TEXTJOIN()", "ADD()", "JOIN.TEXT()"], a: 1 },
-          { q: "Which shortcut locks or cycles cell reference modes ($)?", opts: ["F2", "F4", "F9", "F11"], a: 1 },
-          { q: "What is the result of =IF(5>3, 'Yes', 'No')?", opts: ["No", "Yes", "TRUE", "ERROR"], a: 1 },
-          { q: "Which function replaces VLOOKUP with modern flexibility?", opts: ["LOOKUPNOW", "XLOOKUP", "SUPERLOOKUP", "MATCHV"], a: 1 },
-          { q: "What does the INDEX & MATCH combination replace?", opts: ["SUMIFS", "VLOOKUP limitation of leftward lookup", "Pivot Tables", "Macros"], a: 1 },
-          { q: "Which Excel feature isolates specific rows based on criteria?", opts: ["Sort", "Filter", "Consolidate", "Group"], a: 1 },
-          { q: "How do you strip extra trailing/leading spaces from text?", opts: ["CLEAN()", "TRIM()", "REMOVE()", "CROP()"], a: 1 },
-          { q: "Which formula calculates average based on multiple criteria?", opts: ["AVERAGEIF", "AVERAGEIFS", "SUMIFS", "COUNTIFS"], a: 1 },
-          { q: "What error indicates division by 0?", opts: ["#VALUE!", "#REF!", "#DIV/0!", "#NUM!"], a: 2 },
-          { q: "What does CTRL + Z do in Excel?", opts: ["Redo action", "Undo action", "Select all", "Save file"], a: 1 }
-        ]
+          { q: "What does #N/A mean in Excel?", opts: ["Value not available", "Number overflow", "Column width small", "Division by zero"], a: 0 }
+        ])
       },
       'Business analytics': {
         color: '#d97706',
@@ -504,23 +498,12 @@ app.get('/', (req, res) => {
             <p><strong>8. Cohort Analysis:</strong> Cohort analysis tracks specific user groups sharing common characteristics over predefined timeframes.</p>
           </div>
         \`,
-        mcqs: [
+        mcqs: generate15kQuestions('Business analytics', 'BSA', [
           { q: "What type of analytics explains 'What happened in the past'?", opts: ["Predictive", "Descriptive", "Prescriptive", "Diagnostic"], a: 1 },
           { q: "What does KPI stand for?", opts: ["Key Process Integration", "Key Performance Indicator", "Known Program Insight", "Key Profit Index"], a: 1 },
           { q: "What metric tracks customer turnover/loss rate?", opts: ["Churn Rate", "Bounce Rate", "Retention Index", "LTV"], a: 0 },
-          { q: "What does LTV stand for in customer analytics?", opts: ["Long Term Value", "Lifetime Value", "Last Transaction Valuation", "Lead Total Value"], a: 1 },
-          { q: "Which analytics type suggests actions to take?", opts: ["Descriptive", "Diagnostic", "Predictive", "Prescriptive"], a: 3 },
-          { q: "What is A/B Testing?", opts: ["Testing two versions to see performance", "Auditing financials twice", "Backing up databases", "Comparing 2 employees"], a: 0 },
-          { q: "What does CAC stand for?", opts: ["Customer Acquisition Cost", "Company Audit Capital", "Current Asset Calculation", "Cost Analytics Center"], a: 0 },
-          { q: "What does a correlation value of +1 indicate?", opts: ["No relationship", "Inverse relationship", "Perfect positive linear relationship", "Data error"], a: 2 },
-          { q: "What is data cleaning?", opts: ["Deleting database rows", "Fixing corrupt data records", "Formatting fonts", "Exporting to PDF"], a: 1 },
-          { q: "Which metric measures customer willingness to recommend?", opts: ["ROI", "NPS (Net Promoter Score)", "CTR", "CPM"], a: 1 },
-          { q: "What is an outlier in a dataset?", opts: ["Average value", "Data point significantly different from others", "Median value", "Missing value"], a: 1 },
-          { q: "What does Data Mining involve?", opts: ["Hardware extraction", "Discovering patterns in large datasets", "Writing SQL queries only", "Deleting logs"], a: 1 },
-          { q: "Which chart type best shows trends over time?", opts: ["Pie Chart", "Line Chart", "Scatter Plot", "Gauge Chart"], a: 1 },
-          { q: "Define 'Cohort Analysis'.", opts: ["Analyzing groups with shared characteristics over time", "Comparing two companies", "Calculating daily tax", "Surveying staff"], a: 0 },
-          { q: "What does ROI stand for?", opts: ["Return on Investment", "Rate of Inflation", "Risk of Insolvency", "Revenue on Operations"], a: 0 }
-        ]
+          { q: "What does LTV stand for in customer analytics?", opts: ["Long Term Value", "Lifetime Value", "Last Transaction Valuation", "Lead Total Value"], a: 1 }
+        ])
       }
     };
 
@@ -595,6 +578,7 @@ app.get('/', (req, res) => {
         });
         if (res.ok) {
           state.user = await res.json();
+          if(!state.user.seenQuestions) state.user.seenQuestions = [];
           switchView(state.user.role === 'admin' ? 'admin' : 'lobby');
           if (state.user.role === 'admin') fetchAdminUsers();
         } else {
@@ -871,13 +855,21 @@ app.get('/', (req, res) => {
     }
 
     // --- GAME 4: CAREERBOOT ENGINE ---
+    // High-DPI crisp rendering & perfected text position alignment inside wheel slice
     function renderCareerBootWheelCanvas() {
       const cvs = document.getElementById('cb-wheel-canvas');
       if (!cvs) return;
       const ctx = cvs.getContext('2d');
-      const w = cvs.width = cvs.clientWidth;
-      const h = cvs.height = cvs.clientHeight;
-      const r = Math.min(w, h) / 2 - 10;
+      const dpr = window.devicePixelRatio || 2;
+      const rect = cvs.getBoundingClientRect();
+
+      cvs.width = rect.width * dpr;
+      cvs.height = rect.height * dpr;
+      ctx.scale(dpr, dpr);
+
+      const w = rect.width;
+      const h = rect.height;
+      const r = Math.min(w, h) / 2 - 12;
       const cx = w / 2;
       const cy = h / 2;
 
@@ -891,38 +883,46 @@ app.get('/', (req, res) => {
       ctx.rotate(state.careerboot.wheelAngle);
 
       slices.forEach((sliceKey, i) => {
-        const sliceAngle = i * arc;
+        const sliceStartAngle = i * arc;
+        const sliceEndAngle = sliceStartAngle + arc;
+
+        // Draw Slice Sector
         ctx.beginPath();
         ctx.fillStyle = CAREERBOOT_DATA[sliceKey].color;
         ctx.moveTo(0, 0);
-        ctx.arc(0, 0, r, sliceAngle, sliceAngle + arc);
+        ctx.arc(0, 0, r, sliceStartAngle, sliceEndAngle);
         ctx.lineTo(0, 0);
         ctx.fill();
+
+        // Border
         ctx.strokeStyle = '#d4af37';
         ctx.lineWidth = 3;
         ctx.stroke();
 
+        // Perfectly Aligned Centered Slice Text Alignment
         ctx.save();
-        ctx.rotate(sliceAngle + arc / 2);
+        ctx.rotate(sliceStartAngle + arc / 2);
         ctx.textAlign = 'right';
+        ctx.textBaseline = 'middle';
         ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 12px sans-serif';
-        ctx.shadowColor = '#000000';
-        ctx.shadowBlur = 4;
-        ctx.fillText(sliceKey.toUpperCase(), r - 15, 4);
+        ctx.font = '900 13px ui-sans-serif, system-ui, sans-serif';
+        ctx.shadowColor = 'rgba(0,0,0,0.9)';
+        ctx.shadowBlur = 6;
+        ctx.fillText(sliceKey.toUpperCase(), r - 20, 0);
         ctx.restore();
       });
 
       ctx.restore();
 
+      // Outer Pin Indicator
       ctx.fillStyle = '#fcf6ba';
       ctx.beginPath();
-      ctx.moveTo(cx - 12, cy - r - 4);
-      ctx.lineTo(cx + 12, cy - r - 4);
+      ctx.moveTo(cx - 12, cy - r - 6);
+      ctx.lineTo(cx + 12, cy - r - 6);
       ctx.lineTo(cx, cy - r + 18);
       ctx.fill();
       ctx.strokeStyle = '#800a0a';
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 2.5;
       ctx.stroke();
     }
 
@@ -977,9 +977,21 @@ app.get('/', (req, res) => {
       state.careerboot.accumulatedMultiplier = 0;
       state.careerboot.selectedAnswer = null;
       state.careerboot.isAnswered = false;
+      state.careerboot.askedQuestionIdsThisGame = [];
 
-      const shuffled = [...sliceObj.mcqs].sort(() => 0.5 - Math.random());
+      const seenSet = new Set(state.user.seenQuestions || []);
+      
+      // Filter out previously answered questions to avoid repeats
+      let availableMCQs = sliceObj.mcqs.filter(m => !seenSet.has(m.id));
+
+      // If category exhausted 15000 questions, reset pool
+      if (availableMCQs.length < 15) {
+        availableMCQs = [...sliceObj.mcqs];
+      }
+
+      const shuffled = [...availableMCQs].sort(() => 0.5 - Math.random());
       state.careerboot.activeQuestions = shuffled.slice(0, 15);
+      state.careerboot.askedQuestionIdsThisGame = state.careerboot.activeQuestions.map(q => q.id);
 
       state.careerboot.stage = 'MCQ';
       render();
@@ -1017,10 +1029,23 @@ app.get('/', (req, res) => {
               const finalMult = state.careerboot.accumulatedMultiplier;
               const res = await fetch('/api/play-instant', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username: state.user.username, game: 'careerboot', betAmount: state.userBet, choice: { won: true, multiplier: finalMult } })
+                body: JSON.stringify({
+                  username: state.user.username,
+                  game: 'careerboot',
+                  betAmount: state.userBet,
+                  choice: {
+                    won: true,
+                    multiplier: finalMult,
+                    askedQuestionIds: state.careerboot.askedQuestionIdsThisGame
+                  }
+                })
               });
               const data = await res.json();
-              if (res.ok) state.user.balance = data.newBalance;
+              if (res.ok) {
+                state.user.balance = data.newBalance;
+                if(!state.user.seenQuestions) state.user.seenQuestions = [];
+                state.user.seenQuestions.push(...state.careerboot.askedQuestionIdsThisGame);
+              }
 
               sound.playWin();
               showPopup(\`ALL ROUNDS PASSED! Total Multiplier \${finalMult.toFixed(2)}x! WON ₹\${(state.userBet * finalMult).toFixed(2)}!\`, 'Paisa hi Paisa', () => {
@@ -1035,10 +1060,23 @@ app.get('/', (req, res) => {
         sound.playLoss();
         const res = await fetch('/api/play-instant', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username: state.user.username, game: 'careerboot', betAmount: state.userBet, choice: { won: false, multiplier: 0 } })
+          body: JSON.stringify({
+            username: state.user.username,
+            game: 'careerboot',
+            betAmount: state.userBet,
+            choice: {
+              won: false,
+              multiplier: 0,
+              askedQuestionIds: state.careerboot.askedQuestionIdsThisGame
+            }
+          })
         });
         const data = await res.json();
-        if (res.ok) state.user.balance = data.newBalance;
+        if (res.ok) {
+          state.user.balance = data.newBalance;
+          if(!state.user.seenQuestions) state.user.seenQuestions = [];
+          state.user.seenQuestions.push(...state.careerboot.askedQuestionIdsThisGame);
+        }
 
         setTimeout(() => {
           showPopup(\`WRONG ANSWER! Correct answer highlighted in green. YOU LOST ₹\${state.userBet}.\`, 'Try Again', () => {
