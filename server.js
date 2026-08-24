@@ -1195,7 +1195,7 @@ app.get('/', (req, res) => {
             <div class="tomato-card p-8 rounded-3xl w-full text-center space-y-5">
               <div class="text-6xl">🤑</div>
               <div>
-                <h1 class="text-3xl font-black gold-text tracking-wider">Kismat ka Khel</h1>
+                <h1 class="text-3xl font-black gold-text tracking-wider">Skilled Old Hand</h1>
                 <p class="text-xs font-semibold text-amber-200/70 mt-1">Shree Ganesh Karte Hai</p>
               </div>
               <div class="space-y-3">
@@ -1203,7 +1203,7 @@ app.get('/', (req, res) => {
                 <input id="p" oninput="checkLoginInputsDirectly()" type="password" placeholder="Password" class="w-full p-4 rounded-2xl bg-black/60 border border-amber-500/40 text-white placeholder-amber-200/40 text-sm outline-none">
               </div>
               <button id="lbtn" onclick="handleLogin()" class="hidden w-full gold-gradient text-black font-black py-4 rounded-2xl shadow-xl text-lg">
-                Path of Success 💰
+                Paisa hi Paisa Hoga 💰
               </button>
             </div>
           </div>
@@ -1226,10 +1226,10 @@ app.get('/', (req, res) => {
             </div>
             <div class="flex-1 p-4 grid grid-cols-2 gap-4 overflow-y-auto">
               \${[
-                { id: 'careerboot', name: 'CareerBoot', icon: '🎓', desc: 'Learn & Earn' },
+                { id: 'careerboot', name: 'CareerBoot', icon: '🎓', desc: 'Wheel & MCQ Rounds' },
                 { id: 'aviator', name: 'Aviator', icon: '🚀', desc: 'Realtime Multiplier' },
                 { id: 'guesscorrect', name: 'Guess Correct', icon: '🎲', desc: 'Big vs Small Dice' },
-                { id: 'prediction', name: 'Prediction', icon: '📈', desc: 'Live Market Price' }
+                { id: 'prediction', name: 'Prediction', icon: '📈', desc: 'Live Market Line' }
               ].map(g => \`
                 <button onclick="switchView('\${g.id}')" class="tomato-card p-4 rounded-3xl flex flex-col items-center justify-center text-center space-y-2 active:scale-95 transition-all">
                   <span class="text-4xl">\${g.icon}</span>
