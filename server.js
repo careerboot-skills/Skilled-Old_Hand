@@ -23,7 +23,6 @@ const userSchema = new mongoose.Schema({
   totalWon: { type: Number, default: 0 },
   totalLost: { type: Number, default: 0 },
   totalBetPlaced: { type: Number, default: 0 },
-  // Track asked question IDs so questions NEVER repeat until pool exhausted
   seenQuestions: { type: [String], default: [] }
 });
 const User = mongoose.model('User', userSchema);
@@ -215,7 +214,6 @@ app.post('/api/play-instant', async (req, res) => {
     won = choice.won;
     rewardMultiplier = choice.multiplier || 0;
     
-    // Track asked question IDs in user document to prevent repetitions
     if (choice.askedQuestionIds && Array.isArray(choice.askedQuestionIds)) {
       await User.findOneAndUpdate(
         { username },
@@ -381,7 +379,6 @@ app.get('/', (req, res) => {
       }
     };
 
-    // Helper to programmatically generate 15,000 Questions dynamically per slice
     function generate15kQuestions(category, prefix, sampleTemplates) {
       const mcqs = [];
       for (let i = 1; i <= 3750; i++) {
@@ -855,7 +852,7 @@ app.get('/', (req, res) => {
     }
 
     // --- GAME 4: CAREERBOOT ENGINE ---
-    // High-DPI crisp rendering & perfected text position alignment inside wheel slice
+    // UPDATED & FIXED WHEEL RENDERER WITH CURVED/TANGENTIAL WORD ALIGNMENT
     function renderCareerBootWheelCanvas() {
       const cvs = document.getElementById('cb-wheel-canvas');
       if (!cvs) return;
@@ -894,22 +891,50 @@ app.get('/', (req, res) => {
         ctx.lineTo(0, 0);
         ctx.fill();
 
-        // Border
+        // Slice Border
         ctx.strokeStyle = '#d4af37';
         ctx.lineWidth = 3;
         ctx.stroke();
 
-        // Perfectly Aligned Centered Slice Text Alignment
-        ctx.save();
-        ctx.rotate(sliceStartAngle + arc / 2);
-        ctx.textAlign = 'right';
-        ctx.textBaseline = 'middle';
+        // Perfectly Aligned Curved Text Along Sector Arc
+        const labelText = sliceKey.toUpperCase();
+        const textRadius = r * 0.62;
+        const sliceMidAngle = sliceStartAngle + arc / 2;
+
+        let fontSize = 13;
+        ctx.font = \`900 \${fontSize}px ui-sans-serif, system-ui, sans-serif\`;
+        let totalWidth = ctx.measureText(labelText).width;
+        
+        // Auto-scale font size if label exceeds slice arc width
+        const maxAllowedArcWidth = textRadius * arc * 0.82;
+        if (totalWidth > maxAllowedArcWidth) {
+          fontSize = Math.floor(fontSize * (maxAllowedArcWidth / totalWidth));
+          ctx.font = \`900 \${Math.max(fontSize, 9)}px ui-sans-serif, system-ui, sans-serif\`;
+          totalWidth = ctx.measureText(labelText).width;
+        }
+
         ctx.fillStyle = '#ffffff';
-        ctx.font = '900 13px ui-sans-serif, system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
         ctx.shadowColor = 'rgba(0,0,0,0.9)';
         ctx.shadowBlur = 6;
-        ctx.fillText(sliceKey.toUpperCase(), r - 20, 0);
-        ctx.restore();
+
+        let currentAngle = sliceMidAngle - (totalWidth / textRadius) / 2;
+
+        for (let j = 0; j < labelText.length; j++) {
+          const char = labelText[j];
+          const charWidth = ctx.measureText(char).width;
+          const charAngle = currentAngle + (charWidth / 2) / textRadius;
+
+          ctx.save();
+          ctx.rotate(charAngle);
+          ctx.translate(textRadius, 0);
+          ctx.rotate(Math.PI / 2);
+          ctx.fillText(char, 0, 0);
+          ctx.restore();
+
+          currentAngle += charWidth / textRadius;
+        }
       });
 
       ctx.restore();
@@ -981,10 +1006,8 @@ app.get('/', (req, res) => {
 
       const seenSet = new Set(state.user.seenQuestions || []);
       
-      // Filter out previously answered questions to avoid repeats
       let availableMCQs = sliceObj.mcqs.filter(m => !seenSet.has(m.id));
 
-      // If category exhausted 15000 questions, reset pool
       if (availableMCQs.length < 15) {
         availableMCQs = [...sliceObj.mcqs];
       }
