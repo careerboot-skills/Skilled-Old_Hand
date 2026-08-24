@@ -244,7 +244,7 @@ app.get('/', (req, res) => {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Kismat ka Khel 🤑</title>
+  <title>Skilled Old Hand 🤑</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     * { box-sizing: border-box; touch-action: manipulation; }
