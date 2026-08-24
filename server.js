@@ -175,7 +175,6 @@ app.post('/api/admin/update-balance', async (req, res) => {
   res.status(404).json({ error: 'User not found' });
 });
 
-// Atomic Instant Bet Endpoint
 app.post('/api/play-instant', async (req, res) => {
   const { username, game, betAmount, choice } = req.body;
   const numBet = parseFloat(betAmount);
@@ -364,14 +363,33 @@ app.get('/', (req, res) => {
         round: 1,
         questionIndex: 0,
         activeQuestions: [],
-        accumulatedMultiplier: 0
+        accumulatedMultiplier: 0,
+        selectedAnswer: null,
+        isAnswered: false
       }
     };
 
     const CAREERBOOT_DATA = {
       'Grammar': {
         color: '#dc2626',
-        lesson: \`Grammar forms the structural foundation of professional communication. Master subject-verb agreement, appropriate tense consistency, and structural parallelisms. Professional writing demands accuracy to convey authority in corporate reporting.\`,
+        lesson: \`
+          <div class="space-y-4 text-sm text-amber-100/90 leading-relaxed text-left font-sans">
+            <h3 class="text-base font-bold text-amber-300 border-b border-amber-500/30 pb-1">CHAPTER 1: Executive Writing & Sentence Mechanics</h3>
+            <p><strong>1. Punctuation Rules:</strong> Avoid comma splices and misplaced commas. Correct: "The manager and supervisor agreed." (No comma needed between two subjects connected by 'and').</p>
+            <p><strong>2. Subject-Verb Agreement:</strong> Singular indefinite pronouns like 'neither', 'either', and 'each' require singular verbs. Example: "Neither of the applicants is qualified." Collective nouns acting as a single unit take singular verbs ("A group of experts is presenting").</p>
+            <p><strong>3. Dangling Modifiers:</strong> A modifier must clearly reference its subject. "Having finished the report, the computer crashed" is incorrect because the computer didn't finish the report. Correct structure attaches the modifier directly to the person performing the action.</p>
+
+            <h3 class="text-base font-bold text-amber-300 border-b border-amber-500/30 pb-1 mt-4">CHAPTER 2: Advanced Pronouns & Style Consistency</h3>
+            <p><strong>4. Pronoun Cases:</strong> Objective pronouns (me, him, her, us, them) are targets of prepositions or verbs: "Give the file to John and me" (not 'I' or 'myself').</p>
+            <p><strong>5. Possessives vs Contractions:</strong> "Its" shows possession ("The bird lost its feather"), whereas "It's" is a contraction for "it is" or "it has".</p>
+            <p><strong>6. Parallelism & Voice:</strong> Parallel structure maintains consistent grammatical forms ("reading, writing, and editing"). Active voice emphasizes the actor, whereas Passive voice ("The report was finalized by the committee") focuses on the receiver of the action.</p>
+
+            <h3 class="text-base font-bold text-amber-300 border-b border-amber-500/30 pb-1 mt-4">CHAPTER 3: Clauses, Subjunctives & Diction</h3>
+            <p><strong>7. Clause Independence & Subjunctive:</strong> Independent clauses can stand alone ("The quarterly figures exceeded projections"). Subjunctive mood expresses hypothetical situations: "If I were the CEO, I would expand."</p>
+            <p><strong>8. Commonly Confused Words:</strong> "Affect" is primarily a verb meaning to influence ("The policy will affect all employees"), while "Effect" is usually a noun meaning a result.</p>
+            <p><strong>9. Modifiers & Relative Pronouns:</strong> Adverbs modify adjectives ("exceptionally clear"). Use "whose" to demonstrate relative possession ("The client whose account closed"). Avoid double comparatives like "more smarter".</p>
+          </div>
+        \`,
         mcqs: [
           { q: "Identify the correctly punctuated sentence.", opts: ["The manager, and supervisor agreed.", "The manager and supervisor agreed.", "The manager, and supervisor, agreed.", "The manager and supervisor, agreed."], a: 1 },
           { q: "Which word correctly completes: 'Neither of the applicants ___ qualified.'", opts: ["are", "is", "were", "have"], a: 1 },
@@ -392,7 +410,24 @@ app.get('/', (req, res) => {
       },
       'Vocabulary': {
         color: '#2563eb',
-        lesson: \`Corporate vocabulary enhances business influence. Essential terms include "Synergy", "Mitigate", "Pivot", and "ROI". Precision in vocabulary eliminates ambiguity in stakeholder presentations.\`,
+        lesson: \`
+          <div class="space-y-4 text-sm text-amber-100/90 leading-relaxed text-left font-sans">
+            <h3 class="text-base font-bold text-amber-300 border-b border-amber-500/30 pb-1">CHAPTER 1: Operational & Strategic Terminology</h3>
+            <p><strong>1. Risk & Change Management:</strong> "Mitigate" means to lessen or reduce harm. "Pivot" refers to a strategic change in business direction without changing the core vision.</p>
+            <p><strong>2. Synergy & Feasibility:</strong> "Synergy" represents combined effectiveness greater than individual parts. "Feasible" means something is possible and practical to execute.</p>
+            <p><strong>3. Frameworks & Comparisons:</strong> A "Paradigm" is a standard pattern or model. A "Benchmark" is a standard of excellence against which performance is compared.</p>
+
+            <h3 class="text-base font-bold text-amber-300 border-b border-amber-500/30 pb-1 mt-4">CHAPTER 2: Governance, Agreements & Disruption</h3>
+            <p><strong>4. Transparency & Consensus:</strong> The antonym of transparent is "Opaque". "Consensus" represents general agreement across stakeholders.</p>
+            <p><strong>5. Market Dynamics:</strong> "Disruptive" innovation radically alters an industry standard. "Scalable" processes expand without structural failure.</p>
+            <p><strong>6. Leverage & Control:</strong> "Leverage" in strategy means to use resources to maximum competitive advantage.</p>
+
+            <h3 class="text-base font-bold text-amber-300 border-b border-amber-500/30 pb-1 mt-4">CHAPTER 3: Corporate Finance & Efficiency</h3>
+            <p><strong>7. Financial Trust:</strong> "Fiduciary" duties relate to legal trust and ethical financial management.</p>
+            <p><strong>8. Operational Friction:</strong> A "Discrepancy" is an inconsistency in data. A "Bottleneck" is a point of congestion or delay in workflow.</p>
+            <p><strong>9. Practical Strategy:</strong> "Pragmatic" approaches focus on practical, realistic outcomes over idealist theories.</p>
+          </div>
+        \`,
         mcqs: [
           { q: "What does 'Mitigate' mean?", opts: ["Increase severity", "Lessen or reduce harm", "Duplicate records", "Delay execution"], a: 1 },
           { q: "Choose the synonym for 'Synergy'.", opts: ["Isolation", "Combined effectiveness", "Conflict", "Division"], a: 1 },
@@ -413,7 +448,24 @@ app.get('/', (req, res) => {
       },
       'MS Excel': {
         color: '#059669',
-        lesson: \`MS Excel is the core engine for data operations and reporting. Master VLOOKUP/XLOOKUP, Pivot Tables, SUMIFS, and absolute references ($A$1) to maintain dashboard integrity.\`,
+        lesson: \`
+          <div class="space-y-4 text-sm text-amber-100/90 leading-relaxed text-left font-sans">
+            <h3 class="text-base font-bold text-amber-300 border-b border-amber-500/30 pb-1">CHAPTER 1: Lookup Functions & References</h3>
+            <p><strong>1. Lookup Logic:</strong> VLOOKUP searches for values in the leftmost column of a dataset. XLOOKUP is the modern replacement that eliminates leftward lookup constraints and default exact-match issues.</p>
+            <p><strong>2. Cell Referencing:</strong> The "$" symbol freezes row/column coordinates ($A$1). The F4 key cycles through relative, absolute, and mixed reference modes.</p>
+            <p><strong>3. Index & Match:</strong> Combining INDEX and MATCH provides a robust alternative to VLOOKUP for dynamic, non-contiguous multi-column lookups.</p>
+
+            <h3 class="text-base font-bold text-amber-300 border-b border-amber-500/30 pb-1 mt-4">CHAPTER 2: Data Aggregation & Summarization</h3>
+            <p><strong>4. Pivot Tables:</strong> Pivot Tables rapidly aggregate, summarize, and cross-tabulate large datasets without writing complex formulas.</p>
+            <p><strong>5. Conditional Functions:</strong> COUNTIF counts cells matching a single condition, while AVERAGEIFS calculates average values meeting multiple criteria.</p>
+            <p><strong>6. Logical Statements:</strong> The IF function evaluates expressions (`=IF(5>3, 'Yes', 'No')` returns 'Yes').</p>
+
+            <h3 class="text-base font-bold text-amber-300 border-b border-amber-500/30 pb-1 mt-4">CHAPTER 3: Error Handling & Text Formatting</h3>
+            <p><strong>7. Error Codes:</strong> #N/A indicates a value is not available. #DIV/0! signifies division by zero.</p>
+            <p><strong>8. Text Processing:</strong> CONCATENATE / TEXTJOIN merge multiple strings. TRIM() cleans trailing or leading irregular spaces from text.</p>
+            <p><strong>9. Data Filtering & Shortcuts:</strong> Filtering isolates specific rows matching rules. CTRL + Z performs undo actions instantly.</p>
+          </div>
+        \`,
         mcqs: [
           { q: "Which formula searches for a value in the leftmost column of a table?", opts: ["XLOOKUP", "VLOOKUP", "HLOOKUP", "INDEX"], a: 1 },
           { q: "What symbol freezes cell references in Excel (Absolute Reference)?", opts: ["#", "$", "%", "&"], a: 1 },
@@ -434,7 +486,23 @@ app.get('/', (req, res) => {
       },
       'Business analytics': {
         color: '#d97706',
-        lesson: \`Business Analytics bridges datasets and strategy. Key frameworks include Descriptive, Diagnostic, Predictive, and Prescriptive analytics. Track vital KPIs like CAC, LTV, and Churn.\`,
+        lesson: \`
+          <div class="space-y-4 text-sm text-amber-100/90 leading-relaxed text-left font-sans">
+            <h3 class="text-base font-bold text-amber-300 border-b border-amber-500/30 pb-1">CHAPTER 1: Analytics Taxonomies & KPIs</h3>
+            <p><strong>1. Analytics Types:</strong> Descriptive analytics focuses on past events ("What happened"), Diagnostic analyzes causes, Predictive forecasts trends, and Prescriptive analytics recommends specific business decisions.</p>
+            <p><strong>2. Key Performance Indicators:</strong> KPI stands for Key Performance Indicator. Core metrics include ROI (Return on Investment) and NPS (Net Promoter Score for customer loyalty).</p>
+            <p><strong>3. Customer Economics:</strong> CAC is Customer Acquisition Cost. LTV is Customer Lifetime Value. Churn Rate tracks customer loss percentage over time.</p>
+
+            <h3 class="text-base font-bold text-amber-300 border-b border-amber-500/30 pb-1 mt-4">CHAPTER 2: Experimentation & Statistical Concepts</h3>
+            <p><strong>4. Controlled Testing:</strong> A/B Testing compares two versions of a variable to determine which performs better statistically.</p>
+            <p><strong>5. Correlation & Outliers:</strong> A correlation coefficient of +1 indicates a perfect positive linear relationship. Outliers are extreme data points significantly distant from other observations.</p>
+            <p><strong>6. Data Cleaning & Mining:</strong> Data cleaning fixes corrupt, incomplete, or duplicate records. Data mining extracts underlying patterns from large datasets.</p>
+
+            <h3 class="text-base font-bold text-amber-300 border-b border-amber-500/30 pb-1 mt-4">CHAPTER 3: Data Visualization & Longitudinal Analysis</h3>
+            <p><strong>7. Trend Visualization:</strong> Line charts represent numeric values over continuous time intervals far better than pie charts.</p>
+            <p><strong>8. Cohort Analysis:</strong> Cohort analysis tracks specific user groups sharing common characteristics over predefined timeframes.</p>
+          </div>
+        \`,
         mcqs: [
           { q: "What type of analytics explains 'What happened in the past'?", opts: ["Predictive", "Descriptive", "Prescriptive", "Diagnostic"], a: 1 },
           { q: "What does KPI stand for?", opts: ["Key Process Integration", "Key Performance Indicator", "Known Program Insight", "Key Profit Index"], a: 1 },
@@ -906,43 +974,63 @@ app.get('/', (req, res) => {
       state.careerboot.round = 1;
       state.careerboot.questionIndex = 0;
       state.careerboot.accumulatedMultiplier = 0;
-      state.careerboot.activeQuestions = [...sliceObj.mcqs];
+      state.careerboot.selectedAnswer = null;
+      state.careerboot.isAnswered = false;
+
+      // Unique non-repeating questions shuffle algorithm
+      const shuffled = [...sliceObj.mcqs].sort(() => 0.5 - Math.random());
+      state.careerboot.activeQuestions = shuffled.slice(0, 15);
+
       state.careerboot.stage = 'MCQ';
       render();
     }
 
     async function handleCareerBootAnswer(selectedOptIndex) {
+      if (state.careerboot.isAnswered) return;
+
+      state.careerboot.selectedAnswer = selectedOptIndex;
+      state.careerboot.isAnswered = true;
+
       const currentRound = state.careerboot.round;
       const qIdx = (currentRound - 1) * 5 + state.careerboot.questionIndex;
       const currentQ = state.careerboot.activeQuestions[qIdx];
+
+      render();
 
       if (selectedOptIndex === currentQ.a) {
         sound.playWin();
         const roundMult = currentRound === 1 ? 1.40 : (currentRound === 2 ? 1.60 : 2.00);
         state.careerboot.accumulatedMultiplier += roundMult;
 
-        if (state.careerboot.questionIndex < 4) {
-          state.careerboot.questionIndex++;
-        } else {
-          if (currentRound < 3) {
-            state.careerboot.round++;
-            state.careerboot.questionIndex = 0;
-            showPopup(\`ROUND \${currentRound} COMPLETED! Next Round Multiplier Unlocked!\`, 'Continue');
-          } else {
-            const finalMult = state.careerboot.accumulatedMultiplier;
-            const res = await fetch('/api/play-instant', {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ username: state.user.username, game: 'careerboot', betAmount: state.userBet, choice: { won: true, multiplier: finalMult } })
-            });
-            const data = await res.json();
-            if (res.ok) state.user.balance = data.newBalance;
+        setTimeout(async () => {
+          state.careerboot.selectedAnswer = null;
+          state.careerboot.isAnswered = false;
 
-            sound.playWin();
-            showPopup(\`ALL ROUNDS PASSED! Total Multiplier \${finalMult.toFixed(2)}x! WON ₹\${(state.userBet * finalMult).toFixed(2)}!\`, 'Paisa hi Paisa', () => {
-              state.careerboot.stage = 'WHEEL';
-            });
+          if (state.careerboot.questionIndex < 4) {
+            state.careerboot.questionIndex++;
+          } else {
+            if (currentRound < 3) {
+              state.careerboot.round++;
+              state.careerboot.questionIndex = 0;
+              showPopup(\`ROUND \${currentRound} COMPLETED! Next Round Multiplier Unlocked!\`, 'Continue');
+            } else {
+              const finalMult = state.careerboot.accumulatedMultiplier;
+              const res = await fetch('/api/play-instant', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: state.user.username, game: 'careerboot', betAmount: state.userBet, choice: { won: true, multiplier: finalMult } })
+              });
+              const data = await res.json();
+              if (res.ok) state.user.balance = data.newBalance;
+
+              sound.playWin();
+              showPopup(\`ALL ROUNDS PASSED! Total Multiplier \${finalMult.toFixed(2)}x! WON ₹\${(state.userBet * finalMult).toFixed(2)}!\`, 'Paisa hi Paisa', () => {
+                state.careerboot.stage = 'WHEEL';
+              });
+            }
           }
-        }
+          render();
+        }, 1000);
+
       } else {
         sound.playLoss();
         const res = await fetch('/api/play-instant', {
@@ -952,11 +1040,14 @@ app.get('/', (req, res) => {
         const data = await res.json();
         if (res.ok) state.user.balance = data.newBalance;
 
-        showPopup(\`WRONG ANSWER! YOU LOST ₹\${state.userBet}. Select bet amount and try again!\`, 'Bet Again', () => {
-          state.careerboot.stage = 'WHEEL';
-        });
+        setTimeout(() => {
+          showPopup(\`WRONG ANSWER! Correct answer highlighted in green. YOU LOST ₹\${state.userBet}.\`, 'Try Again', () => {
+            state.careerboot.selectedAnswer = null;
+            state.careerboot.isAnswered = false;
+            state.careerboot.stage = 'WHEEL';
+          });
+        }, 1600);
       }
-      render();
     }
 
     setInterval(() => {
@@ -1180,18 +1271,16 @@ app.get('/', (req, res) => {
             <div class="h-full w-full flex flex-col bg-[#120303] animate-expand">
               <div class="h-14 px-3 bg-red-950 border-b border-amber-500/40 flex items-center justify-between shrink-0">
                 <button onclick="state.careerboot.stage='WHEEL'; render();" class="px-3 py-1 bg-red-900 border border-amber-500/40 rounded-xl text-xs font-bold text-white">Wheel</button>
-                <span class="font-black gold-text uppercase">\${cb.selectedSlice} MODULE</span>
+                <span class="font-black gold-text uppercase">\${cb.selectedSlice} MASTER CLASS</span>
                 <span class="font-mono text-sm text-green-400 font-bold">₹\${state.user.balance.toFixed(2)}</span>
               </div>
               <div class="flex-1 p-5 overflow-y-auto space-y-4">
                 <div class="tomato-card p-6 rounded-3xl space-y-3">
                   <div class="flex items-center gap-2">
-                    <span class="text-2xl">📘</span>
-                    <h2 class="text-xl font-black text-amber-300 uppercase">\${cb.selectedSlice} Comprehensive Lesson</h2>
+                    <span class="text-2xl">📖</span>
+                    <h2 class="text-xl font-black text-amber-300 uppercase">\${cb.selectedSlice} Deep Detailed Chapter</h2>
                   </div>
-                  <p class="text-sm text-amber-100/90 leading-relaxed text-justify font-sans">
-                    \${sliceData.lesson}
-                  </p>
+                  \${sliceData.lesson}
                 </div>
               </div>
               <div class="p-4 bg-red-950 border-t border-amber-500/40 shrink-0 flex justify-center">
@@ -1214,7 +1303,7 @@ app.get('/', (req, res) => {
                 <span class="text-xs font-mono font-bold text-green-400">MULT: \${roundMultText}</span>
               </div>
               <div class="p-3 bg-black/40 border-b border-amber-500/20 flex justify-between items-center shrink-0">
-                <span class="text-xs text-amber-200/70 font-semibold">Question \${cb.questionIndex + 1} of 5</span>
+                <span class="text-xs text-amber-200/70 font-semibold">Question \${cb.questionIndex + 1} of 5 (Total 15)</span>
                 <span class="text-xs font-mono text-amber-300 font-bold">ACCUMULATED: \${cb.accumulatedMultiplier.toFixed(2)}x</span>
               </div>
               <div class="flex-1 p-5 flex flex-col justify-between overflow-y-auto">
@@ -1222,11 +1311,23 @@ app.get('/', (req, res) => {
                   <h3 class="text-base font-bold text-amber-300 leading-snug">\${qObj.q}</h3>
                 </div>
                 <div class="space-y-3 my-4">
-                  \${qObj.opts.map((opt, idx) => \`
-                    <button onclick="handleCareerBootAnswer(\${idx})" class="w-full p-4 rounded-2xl bg-black/70 border border-amber-500/40 text-left text-sm font-semibold text-white active:bg-amber-500 active:text-black transition-all shadow-md">
-                      <span class="text-amber-400 font-black mr-2">\${['A','B','C','D'][idx]}.</span> \${opt}
-                    </button>
-                  \`).join('')}
+                  \${qObj.opts.map((opt, idx) => {
+                    let btnStyle = 'bg-black/70 border-amber-500/40 text-white';
+
+                    if (cb.isAnswered) {
+                      if (idx === qObj.a) {
+                        btnStyle = 'bg-emerald-600 border-emerald-400 text-white font-bold ring-2 ring-emerald-300';
+                      } else if (idx === cb.selectedAnswer && cb.selectedAnswer !== qObj.a) {
+                        btnStyle = 'bg-red-600 border-red-400 text-white font-bold';
+                      }
+                    }
+
+                    return \`
+                      <button onclick="handleCareerBootAnswer(\${idx})" \${cb.isAnswered ? 'disabled' : ''} class="w-full p-4 rounded-2xl border text-left text-sm font-semibold transition-all shadow-md \${btnStyle}">
+                        <span class="text-amber-300 font-black mr-2">\${['A','B','C','D'][idx]}.</span> \${opt}
+                      </button>
+                    \`;
+                  }).join('')}
                 </div>
               </div>
             </div>
