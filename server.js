@@ -1261,6 +1261,1020 @@ app.get('/', (req, res) => {
 
       render();
 
+      Conversation with Gemini
+This file is giving blank screen, fix the issues cause and give me the updated file.
+
+Here is the analysis of the issue along with the updated, fixed code.
+
+Cause of the Blank Screen
+The file rendered a blank screen because the inline HTML/JavaScript string template inside app.get('/', ...) was accidentally truncated at the end (roundMultText = cb.round === 1 ? '+1.40x' : (cb.round === 2 ? '+1.6). This unclosed template string resulted in a server-side syntax error during module parsing, preventing the server from serving responses.
+
+Fixed & Complete Server Script
+Below is the complete, self-contained server file with the frontend code fully restored:
+
+JavaScript
+const express = require('express');
+const http = require('http');
+const WebSocket = require('ws');
+const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
+const cors = require('cors');
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+const server = http.createServer(app);
+const wss = new WebSocket.Server({ server });
+
+// ==========================================
+// MONGOOSE SCHEMAS & MODELS
+// ==========================================
+const userSchema = new mongoose.Schema({
+  username: { type: String, required: true, unique: true },
+  password: { type: String, required: true },
+  role: { type: String, enum: ['admin', 'player'], default: 'player' },
+  balance: { type: Number, default: 1000 },
+  totalWon: { type: Number, default: 0 },
+  totalLost: { type: Number, default: 0 },
+  totalBetPlaced: { type: Number, default: 0 },
+  seenQuestions: { type: [String], default: [] }
+});
+const User = mongoose.model('User', userSchema);
+
+const historySchema = new mongoose.Schema({
+  game: String,
+  multiplier: Number,
+  timestamp: { type: Date, default: Date.now }
+});
+const GameHistory = mongoose.model('GameHistory', historySchema);
+
+// ==========================================
+// PROBABILITY ENGINES
+// ==========================================
+function getAviatorMultiplier() {
+  const rand = Math.random() * 100;
+  if (rand < 35) return +(1.00 + Math.random() * 0.04).toFixed(2);
+  if (rand < 55) return +(1.05 + Math.random() * 0.40).toFixed(2);
+  if (rand < 80) return +(1.46 + Math.random() * 0.99).toFixed(2);
+  if (rand < 90) return +(2.46 + Math.random() * 1.99).toFixed(2);
+  if (rand < 95) return +(4.46 + Math.random() * 17.57).toFixed(2);
+  if (rand < 98) return +(22.04 + Math.random() * 19.11).toFixed(2);
+  return +(41.16 + Math.random() * 73.97).toFixed(2);
+}
+
+function getGenericRewardMultiplier() {
+  const rand = Math.random() * 100;
+  if (rand < 30) return 1;
+  if (rand < 55) return 2;
+  if (rand < 65) return 3;
+  if (rand < 80) return 4;
+  if (rand < 85) return 5;
+  if (rand < 89) return 6;
+  if (rand < 92) return 7;
+  if (rand < 97) return 8;
+  if (rand < 99) return 9;
+  return 10;
+}
+
+// ==========================================
+// 24x7 AVIATOR ENGINE (WebSocket)
+// ==========================================
+let aviatorState = { status: 'WAITING', currentX: 1.00, crashX: 1.00, history: [] };
+
+function broadcast(data) {
+  wss.clients.forEach(client => {
+    if (client.readyState === WebSocket.OPEN) client.send(JSON.stringify(data));
+  });
+}
+
+async function startAviatorLoop() {
+  try {
+    const docs = await GameHistory.find({ game: 'aviator' }).sort({ timestamp: -1 }).limit(20);
+    aviatorState.history = docs.map(d => d.multiplier);
+  } catch (err) {
+    console.error("History fetch error:", err.message);
+  }
+
+  while (true) {
+    try {
+      aviatorState.status = 'WAITING';
+      aviatorState.currentX = 1.00;
+      aviatorState.crashX = getAviatorMultiplier();
+      broadcast({ type: 'AVIATOR_STATE', ...aviatorState });
+
+      await new Promise(r => setTimeout(r, 5000));
+
+      aviatorState.status = 'FLYING';
+      let startTime = Date.now();
+
+      await new Promise(resolve => {
+        const interval = setInterval(async () => {
+          let elapsed = (Date.now() - startTime) / 1000;
+          aviatorState.currentX = +(Math.pow(1.06, elapsed * 2.2)).toFixed(2);
+
+          if (aviatorState.currentX >= aviatorState.crashX) {
+            aviatorState.currentX = aviatorState.crashX;
+            aviatorState.status = 'CRASHED';
+            clearInterval(interval);
+
+            try { 
+              await GameHistory.create({ game: 'aviator', multiplier: aviatorState.crashX }); 
+            } catch (e) {
+              console.error("GameHistory save error:", e.message);
+            }
+
+            aviatorState.history.unshift(aviatorState.crashX);
+            if (aviatorState.history.length > 20) aviatorState.history.pop();
+
+            broadcast({ type: 'AVIATOR_STATE', ...aviatorState });
+            setTimeout(resolve, 2000);
+          } else {
+            broadcast({ type: 'AVIATOR_STATE', ...aviatorState });
+          }
+        }, 100);
+      });
+    } catch (loopErr) {
+      console.error("Loop iteration error:", loopErr.message);
+      await new Promise(r => setTimeout(r, 2000));
+    }
+  }
+}
+
+// ==========================================
+// HTTP APIs & AUTH
+// ==========================================
+app.post('/api/login', async (req, res) => {
+  const { username, password } = req.body;
+  const user = await User.findOne({ username });
+  if (!user || !(await bcrypt.compare(password, user.password))) {
+    return res.status(401).json({ error: 'Invalid credentials' });
+  }
+  res.json({ username: user.username, role: user.role, balance: user.balance, seenQuestions: user.seenQuestions || [] });
+});
+
+app.post('/api/change-password', async (req, res) => {
+  const { username, oldPassword, newPassword } = req.body;
+  const user = await User.findOne({ username });
+  if (!user || !(await bcrypt.compare(oldPassword, user.password))) {
+    return res.status(400).json({ error: 'Old Password Incorrect!' });
+  }
+  user.password = await bcrypt.hash(newPassword, 10);
+  await user.save();
+  res.json({ success: true, message: 'Password Updated Successfully!' });
+});
+
+app.post('/api/admin/create-user', async (req, res) => {
+  const { username, password } = req.body;
+  try {
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const user = await User.create({ username, password: hashedPassword });
+    res.json(user);
+  } catch (err) {
+    res.status(400).json({ error: 'Username already exists' });
+  }
+});
+
+app.get('/api/admin/users', async (req, res) => {
+  const users = await User.find({ role: 'player' });
+  res.json(users);
+});
+
+app.post('/api/admin/update-balance', async (req, res) => {
+  const { username, amount } = req.body;
+  const user = await User.findOneAndUpdate(
+    { username },
+    { $inc: { balance: amount } },
+    { new: true }
+  );
+  if (user) return res.json({ success: true, newBalance: user.balance });
+  res.status(404).json({ error: 'User not found' });
+});
+
+app.post('/api/play-instant', async (req, res) => {
+  const { username, game, betAmount, choice } = req.body;
+  const numBet = parseFloat(betAmount);
+  if (isNaN(numBet) || numBet <= 0) return res.status(400).json({ error: 'Invalid Bet Amount' });
+
+  const initialUser = await User.findOneAndUpdate(
+    { username, balance: { $gte: numBet } },
+    { $inc: { balance: -numBet, totalBetPlaced: numBet } },
+    { new: true }
+  );
+
+  if (!initialUser) return res.status(400).json({ error: 'Insufficient Balance' });
+
+  let won = false;
+  let rewardMultiplier = 0;
+  let resultMeta = {};
+
+  if (game === 'dice') {
+    const d1 = Math.floor(Math.random() * 6) + 1;
+    const d2 = Math.floor(Math.random() * 6) + 1;
+    const sum = d1 + d2;
+    const isSmall = sum >= 2 && sum <= 6;
+    if ((isSmall && choice === 'small') || (!isSmall && choice === 'big')) {
+      won = true;
+      rewardMultiplier = getGenericRewardMultiplier();
+    }
+    resultMeta = { dice1: d1, dice2: d2, sum };
+  } else if (game === 'prediction') {
+    const startVal = choice.startVal;
+    const endVal = choice.endVal;
+    const dir = choice.direction;
+    won = (dir === 'up' && endVal > startVal) || (dir === 'down' && endVal < startVal);
+    rewardMultiplier = won ? 2 : 0;
+    resultMeta = { startVal, endVal };
+  } else if (game === 'careerboot') {
+    won = choice.won;
+    rewardMultiplier = choice.multiplier || 0;
+    
+    if (choice.askedQuestionIds && Array.isArray(choice.askedQuestionIds)) {
+      await User.findOneAndUpdate(
+        { username },
+        { $addToSet: { seenQuestions: { $each: choice.askedQuestionIds } } }
+      );
+    }
+  }
+
+  const winPayout = won ? (numBet * rewardMultiplier) : 0;
+  let finalUser;
+
+  if (winPayout > 0) {
+    finalUser = await User.findOneAndUpdate(
+      { username },
+      { $inc: { balance: winPayout, totalWon: winPayout } },
+      { new: true }
+    );
+  } else {
+    finalUser = await User.findOneAndUpdate(
+      { username },
+      { $inc: { totalLost: numBet } },
+      { new: true }
+    );
+  }
+
+  res.json({ won, rewardMultiplier, newBalance: finalUser.balance, seenQuestions: finalUser.seenQuestions, resultMeta });
+});
+
+// ==========================================
+// EMBEDDED FRONTEND ENGINE
+// ==========================================
+app.get('/', (req, res) => {
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(`
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Skilled Old Hand 🤑</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    * { box-sizing: border-box; touch-action: manipulation; }
+    body, html { height: 100%; width: 100%; margin: 0; padding: 0; overflow: hidden; background-color: #0d0202; font-family: ui-sans-serif, system-ui; }
+    .gold-gradient { background: linear-gradient(135deg, #bf953f, #fcf6ba, #b38728, #fbf5b7); }
+    .gold-text { background: linear-gradient(135deg, #bf953f, #fcf6ba, #b38728); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .tomato-card { background: linear-gradient(145deg, #800a0a, #360303); border: 2px solid #d4af37; box-shadow: 0 10px 25px rgba(0,0,0,0.8); }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+    @keyframes popIn {
+      0% { transform: scale(0.6); opacity: 0; }
+      80% { transform: scale(1.05); opacity: 1; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .popup-anim { animation: popIn 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+
+    @keyframes expandPage {
+      0% { transform: scale(0.1) rotate(-15deg); opacity: 0; }
+      100% { transform: scale(1) rotate(0deg); opacity: 1; }
+    }
+    .animate-expand { animation: expandPage 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+  </style>
+</head>
+<body class="h-full w-full flex items-center justify-center p-0 md:p-4">
+
+  <div id="app" class="w-full h-full max-w-md max-h-[920px] bg-[#120303] md:rounded-3xl border-0 md:border-2 border-[#d4af37]/40 shadow-2xl flex flex-col relative overflow-hidden"></div>
+
+  <script>
+    class SoundEngine {
+      constructor() { this.ctx = null; }
+      init() { if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)(); }
+      stopAll() {
+        if (this.ctx && this.ctx.state !== 'closed') {
+          this.ctx.close();
+          this.ctx = null;
+        }
+      }
+      playFly() {
+        if (state.currentView !== 'aviator') return;
+        this.init();
+        let osc = this.ctx.createOscillator(); let g = this.ctx.createGain();
+        osc.frequency.setValueAtTime(140, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(300, this.ctx.currentTime + 0.1);
+        g.gain.setValueAtTime(0.02, this.ctx.currentTime);
+        osc.connect(g); g.connect(this.ctx.destination);
+        osc.start(); osc.stop(this.ctx.currentTime + 0.1);
+      }
+      playCoinFlip() {
+        if (state.currentView !== 'guesscorrect' && state.currentView !== 'careerboot') return;
+        this.init();
+        let osc = this.ctx.createOscillator(); let g = this.ctx.createGain();
+        osc.frequency.setValueAtTime(800, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(200, this.ctx.currentTime + 0.08);
+        g.gain.setValueAtTime(0.04, this.ctx.currentTime);
+        osc.connect(g); g.connect(this.ctx.destination);
+        osc.start(); osc.stop(this.ctx.currentTime + 0.08);
+      }
+      playMarketBeep() {
+        if (state.currentView !== 'prediction') return;
+        this.init();
+        let osc = this.ctx.createOscillator(); let g = this.ctx.createGain();
+        osc.frequency.setValueAtTime(600, this.ctx.currentTime);
+        g.gain.setValueAtTime(0.01, this.ctx.currentTime);
+        osc.connect(g); g.connect(this.ctx.destination);
+        osc.start(); osc.stop(this.ctx.currentTime + 0.05);
+      }
+      playWin() {
+        if (['lobby', 'login', 'admin', 'pwchange'].includes(state.currentView)) return;
+        this.init();
+        let osc = this.ctx.createOscillator(); let g = this.ctx.createGain();
+        osc.frequency.setValueAtTime(523.25, this.ctx.currentTime);
+        osc.frequency.setValueAtTime(659.25, this.ctx.currentTime + 0.1);
+        osc.frequency.setValueAtTime(783.99, this.ctx.currentTime + 0.2);
+        g.gain.setValueAtTime(0.1, this.ctx.currentTime);
+        osc.connect(g); g.connect(this.ctx.destination);
+        osc.start(); osc.stop(this.ctx.currentTime + 0.35);
+      }
+      playLoss() {
+        if (['lobby', 'login', 'admin', 'pwchange'].includes(state.currentView)) return;
+        this.init();
+        let osc = this.ctx.createOscillator(); osc.type = 'sawtooth'; let g = this.ctx.createGain();
+        osc.frequency.setValueAtTime(180, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(40, this.ctx.currentTime + 0.3);
+        g.gain.setValueAtTime(0.1, this.ctx.currentTime);
+        osc.connect(g); g.connect(this.ctx.destination);
+        osc.start(); osc.stop(this.ctx.currentTime + 0.3);
+      }
+    }
+    const sound = new SoundEngine();
+
+    let state = {
+      user: null,
+      currentView: 'login',
+      adminSubTab: 'users',
+      aviator: { status: 'WAITING', currentX: 1.00, history: [] },
+      userBet: 100,
+      hasBetAviator: false,
+      nextRoundBet: false,
+      cashedOut: false,
+      popup: null,
+      adminUsers: [],
+      diceRolling: false,
+      diceResults: [1, 1],
+      marketHistory: [120, 125, 122, 130, 128, 135, 140, 138, 145, 150],
+      predictionMark1: null,
+      predictionMark2: null,
+      predictionTimer: 0,
+      pulseRadius: 0,
+
+      careerboot: {
+        stage: 'WHEEL',
+        selectedSlice: null,
+        spinning: false,
+        wheelAngle: 0,
+        round: 1,
+        questionIndex: 0,
+        activeQuestions: [],
+        accumulatedMultiplier: 0,
+        selectedAnswer: null,
+        isAnswered: false,
+        askedQuestionIdsThisGame: []
+      }
+    };
+
+    function generate15kQuestions(category, prefix, sampleTemplates) {
+      const mcqs = [];
+      for (let i = 1; i <= 3750; i++) {
+        sampleTemplates.forEach((tmpl, idx) => {
+          mcqs.push({
+            id: \`\${prefix}_\${i}_\${idx}\`,
+            q: \`[#\${i}] \${tmpl.q}\`,
+            opts: tmpl.opts,
+            a: tmpl.a
+          });
+        });
+      }
+      return mcqs;
+    }
+
+    const CAREERBOOT_DATA = {
+      'Grammar': {
+        color: '#dc2626',
+        lesson: \`
+          <div class="space-y-4 text-sm text-amber-100/90 leading-relaxed text-left font-sans">
+            <h3 class="text-base font-bold text-amber-300 border-b border-amber-500/30 pb-1">CHAPTER 1: Executive Writing & Sentence Mechanics</h3>
+            <p><strong>1. Punctuation Rules:</strong> Avoid comma splices and misplaced commas. Correct: "The manager and supervisor agreed." (No comma needed between two subjects connected by 'and').</p>
+            <p><strong>2. Subject-Verb Agreement:</strong> Singular indefinite pronouns like 'neither', 'either', and 'each' require singular verbs. Example: "Neither of the applicants is qualified." Collective nouns acting as a single unit take singular verbs ("A group of experts is presenting").</p>
+            <p><strong>3. Dangling Modifiers:</strong> A modifier must clearly reference its subject. "Having finished the report, the computer crashed" is incorrect because the computer didn't finish the report. Correct structure attaches the modifier directly to the person performing the action.</p>
+
+            <h3 class="text-base font-bold text-amber-300 border-b border-amber-500/30 pb-1 mt-4">CHAPTER 2: Advanced Pronouns & Style Consistency</h3>
+            <p><strong>4. Pronoun Cases:</strong> Objective pronouns (me, him, her, us, them) are targets of prepositions or verbs: "Give the file to John and me" (not 'I' or 'myself').</p>
+            <p><strong>5. Possessives vs Contractions:</strong> "Its" shows possession ("The bird lost its feather"), whereas "It's" is a contraction for "it is" or "it has".</p>
+            <p><strong>6. Parallelism & Voice:</strong> Parallel structure maintains consistent grammatical forms ("reading, writing, and editing"). Active voice emphasizes the actor, whereas Passive voice ("The report was finalized by the committee") focuses on the receiver of the action.</p>
+
+            <h3 class="text-base font-bold text-amber-300 border-b border-amber-500/30 pb-1 mt-4">CHAPTER 3: Clauses, Subjunctives & Diction</h3>
+            <p><strong>7. Clause Independence & Subjunctive:</strong> Independent clauses can stand alone ("The quarterly figures exceeded projections"). Subjunctive mood expresses hypothetical situations: "If I were the CEO, I would expand."</p>
+            <p><strong>8. Commonly Confused Words:</strong> "Affect" is primarily a verb meaning to influence ("The policy will affect all employees"), while "Effect" is usually a noun meaning a result.</p>
+            <p><strong>9. Modifiers & Relative Pronouns:</strong> Adverbs modify adjectives ("exceptionally clear"). Use "whose" to demonstrate relative possession ("The client whose account closed"). Avoid double comparatives like "more smarter".</p>
+          </div>
+        \`,
+        mcqs: generate15kQuestions('Grammar', 'GMR', [
+          { q: "Identify the correctly punctuated sentence.", opts: ["The manager, and supervisor agreed.", "The manager and supervisor agreed.", "The manager, and supervisor, agreed.", "The manager and supervisor, agreed."], a: 1 },
+          { q: "Which word correctly completes: 'Neither of the applicants ___ qualified.'", opts: ["are", "is", "were", "have"], a: 1 },
+          { q: "Choose the sentence with correct subject-verb agreement.", opts: ["Data shows great progress.", "The team are winning.", "A group of experts is presenting.", "Both is arriving today."], a: 2 },
+          { q: "Which phrase contains a dangling modifier?", opts: ["Having finished the report, the computer crashed.", "After completing the audit, she left.", "To succeed, practice daily.", "While reviewing numbers, we saw mistakes."], a: 0 },
+          { q: "Identify the correct pronoun: 'Send the final document to Sarah and ___.'", opts: ["I", "me", "myself", "mine"], a: 1 }
+        ])
+      },
+      'Vocabulary': {
+        color: '#2563eb',
+        lesson: \`
+          <div class="space-y-4 text-sm text-amber-100/90 leading-relaxed text-left font-sans">
+            <h3 class="text-base font-bold text-amber-300 border-b border-amber-500/30 pb-1">CHAPTER 1: Operational & Strategic Terminology</h3>
+            <p><strong>1. Risk & Change Management:</strong> "Mitigate" means to lessen or reduce harm. "Pivot" refers to a strategic change in business direction without changing the core vision.</p>
+            <p><strong>2. Synergy & Feasibility:</strong> "Synergy" represents combined effectiveness greater than individual parts. "Feasible" means something is possible and practical to execute.</p>
+            <p><strong>3. Frameworks & Comparisons:</strong> A "Paradigm" is a standard pattern or model. A "Benchmark" is a standard of excellence against which performance is compared.</p>
+          </div>
+        \`,
+        mcqs: generate15kQuestions('Vocabulary', 'VOC', [
+          { q: "What does 'Mitigate' mean?", opts: ["Increase severity", "Lessen or reduce harm", "Duplicate records", "Delay execution"], a: 1 },
+          { q: "Choose the synonym for 'Synergy'.", opts: ["Isolation", "Combined effectiveness", "Conflict", "Division"], a: 1 },
+          { q: "What is the meaning of 'Pivot' in business?", opts: ["Close operations", "Maintain current strategy", "Strategic change in course", "File for bankruptcy"], a: 2 }
+        ])
+      },
+      'MS Excel': {
+        color: '#059669',
+        lesson: \`
+          <div class="space-y-4 text-sm text-amber-100/90 leading-relaxed text-left font-sans">
+            <h3 class="text-base font-bold text-amber-300 border-b border-amber-500/30 pb-1">CHAPTER 1: Lookup Functions & References</h3>
+            <p><strong>1. Lookup Logic:</strong> VLOOKUP searches for values in the leftmost column of a dataset. XLOOKUP is the modern replacement that eliminates leftward lookup constraints and default exact-match issues.</p>
+            <p><strong>2. Cell Referencing:</strong> The "$" symbol freezes row/column coordinates ($A$1). The F4 key cycles through relative, absolute, and mixed reference modes.</p>
+          </div>
+        \`,
+        mcqs: generate15kQuestions('MS Excel', 'EXC', [
+          { q: "Which formula searches for a value in the leftmost column of a table?", opts: ["XLOOKUP", "VLOOKUP", "HLOOKUP", "INDEX"], a: 1 },
+          { q: "What symbol freezes cell references in Excel (Absolute Reference)?", opts: ["#", "$", "%", "&"], a: 1 }
+        ])
+      },
+      'Business analytics': {
+        color: '#d97706',
+        lesson: \`
+          <div class="space-y-4 text-sm text-amber-100/90 leading-relaxed text-left font-sans">
+            <h3 class="text-base font-bold text-amber-300 border-b border-amber-500/30 pb-1">CHAPTER 1: Analytics Taxonomies & KPIs</h3>
+            <p><strong>1. Analytics Types:</strong> Descriptive analytics focuses on past events ("What happened"), Diagnostic analyzes causes, Predictive forecasts trends, and Prescriptive analytics recommends specific business decisions.</p>
+          </div>
+        \`,
+        mcqs: generate15kQuestions('Business analytics', 'BSA', [
+          { q: "What type of analytics explains 'What happened in the past'?", opts: ["Predictive", "Descriptive", "Prescriptive", "Diagnostic"], a: 1 },
+          { q: "What does KPI stand for?", opts: ["Key Process Integration", "Key Performance Indicator", "Known Program Insight", "Key Profit Index"], a: 1 }
+        ])
+      }
+    };
+
+    function drawRoundedRect(ctx, x, y, width, height, radius, fillStyle, textColor, text) {
+      ctx.fillStyle = fillStyle;
+      ctx.beginPath();
+      ctx.moveTo(x + radius, y);
+      ctx.lineTo(x + width - radius, y);
+      ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+      ctx.lineTo(x + width, y + height - radius);
+      ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+      ctx.lineTo(x + radius, y + height);
+      ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+      ctx.lineTo(x, y + radius);
+      ctx.quadraticCurveTo(x, y, x + radius, y);
+      ctx.closePath();
+      ctx.fill();
+
+      if (text) {
+        ctx.fillStyle = textColor;
+        ctx.fillText(text, x + 6, y + 13);
+      }
+    }
+
+    function switchView(targetView) {
+      if (['lobby', 'login', 'admin', 'pwchange'].includes(targetView)) {
+        sound.stopAll();
+      }
+      state.currentView = targetView;
+      render();
+    }
+
+    const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host);
+    ws.onmessage = (e) => {
+      const data = JSON.parse(e.data);
+      if (data.type === 'AVIATOR_STATE') {
+        state.aviator = data;
+        if (data.status === 'WAITING') {
+          if (state.nextRoundBet) {
+            state.hasBetAviator = true;
+            state.nextRoundBet = false;
+          }
+          state.cashedOut = false;
+        }
+        if (data.status === 'FLYING' && !state.cashedOut) sound.playFly();
+        if (data.status === 'CRASHED' && state.hasBetAviator && !state.cashedOut) {
+          sound.playLoss();
+          state.hasBetAviator = false;
+        }
+        if (state.currentView === 'aviator') renderAviatorOverlay();
+      }
+    };
+
+    function showPopup(title, btnText, onConfirm = null) {
+      state.popup = { title, btnText, onConfirm };
+      render();
+    }
+    function closePopup() { 
+      if (state.popup && state.popup.onConfirm) state.popup.onConfirm();
+      state.popup = null; 
+      render(); 
+    }
+
+    async function handleLogin() {
+      sound.init();
+      const u = document.getElementById('u').value;
+      const p = document.getElementById('p').value;
+      try {
+        const res = await fetch('/api/login', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: u, password: p })
+        });
+        if (res.ok) {
+          state.user = await res.json();
+          if(!state.user.seenQuestions) state.user.seenQuestions = [];
+          switchView(state.user.role === 'admin' ? 'admin' : 'lobby');
+          if (state.user.role === 'admin') fetchAdminUsers();
+        } else {
+          showPopup('Invalid credentials', 'Try again');
+        }
+      } catch(e) {
+        showPopup('Connection Error', 'Try again');
+      }
+      render();
+    }
+
+    async function fetchAdminUsers() {
+      const res = await fetch('/api/admin/users');
+      if (res.ok) state.adminUsers = await res.json();
+      render();
+    }
+
+    function checkLoginInputsDirectly() {
+      const u = document.getElementById('u')?.value || '';
+      const p = document.getElementById('p')?.value || '';
+      const btn = document.getElementById('lbtn');
+      if (btn) {
+        if (u.trim() !== '' && p.trim() !== '') btn.classList.remove('hidden');
+        else btn.classList.add('hidden');
+      }
+    }
+
+    async function changePassword() {
+      const oldPassword = document.getElementById('opw').value;
+      const newPassword = document.getElementById('npw').value;
+      const res = await fetch('/api/change-password', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: state.user.username, oldPassword, newPassword })
+      });
+      const data = await res.json();
+      if (res.ok) showPopup(data.message, 'OK');
+      else showPopup(data.error || 'Error', 'OK');
+    }
+
+    function updateBetAmount(delta) {
+      state.userBet = Math.max(10, state.userBet + delta);
+      const inputs = document.querySelectorAll('.bet-amt-input');
+      inputs.forEach(i => i.value = state.userBet);
+      if(state.currentView === 'aviator') renderAviatorOverlay();
+      else render();
+    }
+
+    function renderBetControllerUI() {
+      return \`
+        <div class="flex items-center justify-between bg-black/60 p-2 rounded-2xl border border-amber-500/40 w-full max-w-xs shadow-lg">
+          <span class="text-xs text-amber-300 font-bold ml-2">BET AMOUNT:</span>
+          <div class="flex items-center gap-2">
+            <button onclick="updateBetAmount(-10)" class="w-9 h-9 rounded-xl bg-red-900/80 border border-red-500 text-amber-300 font-black text-lg flex items-center justify-center active:scale-95">-</button>
+            <input type="number" readonly value="\${state.userBet}" class="bet-amt-input w-20 bg-black/80 border border-amber-500/50 rounded-xl text-center font-mono font-bold text-amber-300 py-1.5 text-sm outline-none">
+            <button onclick="updateBetAmount(10)" class="w-9 h-9 rounded-xl bg-emerald-900/80 border border-emerald-500 text-amber-300 font-black text-lg flex items-center justify-center active:scale-95">+</button>
+          </div>
+        </div>
+      \`;
+    }
+
+    // --- GAME 1: AVIATOR ---
+    async function handleAviatorAction() {
+      sound.init();
+      if (state.aviator.status === 'WAITING' && !state.hasBetAviator) {
+        if(state.user.balance < state.userBet) return showPopup("Insufficient Balance!", "OK");
+        state.hasBetAviator = true;
+        renderAviatorOverlay();
+      } else if (state.aviator.status === 'FLYING') {
+        if (state.hasBetAviator && !state.cashedOut) {
+          state.cashedOut = true;
+          const winAmt = +(state.userBet * state.aviator.currentX).toFixed(2);
+          state.user.balance += (winAmt - state.userBet);
+          sound.playWin();
+          showPopup(\`CASHED OUT AT \${state.aviator.currentX.toFixed(2)}x! WON ₹\${winAmt}\`, 'Paisa hi Paisa');
+          state.hasBetAviator = false;
+          renderAviatorOverlay();
+        } else if (!state.hasBetAviator && !state.nextRoundBet) {
+          if(state.user.balance < state.userBet) return showPopup("Insufficient Balance!", "OK");
+          state.nextRoundBet = true;
+          renderAviatorOverlay();
+        }
+      }
+    }
+
+    function renderAviatorCanvas() {
+      const cvs = document.getElementById('aviator-canvas');
+      if(!cvs) return;
+      const ctx = cvs.getContext('2d');
+      const w = cvs.width = cvs.clientWidth;
+      const h = cvs.height = cvs.clientHeight;
+
+      ctx.clearRect(0, 0, w, h);
+      
+      ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 1;
+      for(let x=0; x<w; x+=30) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke(); }
+      for(let y=0; y<h; y+=30) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); }
+
+      if(state.aviator.status === 'FLYING' || state.aviator.status === 'CRASHED') {
+        const progress = Math.min((state.aviator.currentX - 1) / 8, 1);
+        const endX = 30 + (w - 70) * progress;
+        const endY = (h - 30) - (h - 70) * Math.pow(progress, 0.8);
+
+        ctx.beginPath();
+        ctx.moveTo(30, h - 30);
+        ctx.quadraticCurveTo(w * 0.35, h - 30, endX, endY);
+        ctx.strokeStyle = state.aviator.status === 'CRASHED' ? '#ef4444' : '#eab308';
+        ctx.lineWidth = 4;
+        ctx.stroke();
+
+        ctx.lineTo(endX, h - 30); ctx.lineTo(30, h - 30);
+        ctx.fillStyle = state.aviator.status === 'CRASHED' ? 'rgba(239, 68, 68, 0.2)' : 'rgba(234, 179, 8, 0.2)';
+        ctx.fill();
+
+        ctx.save();
+        ctx.translate(endX, endY);
+        if(state.aviator.status === 'CRASHED') {
+          ctx.font = '32px sans-serif';
+          ctx.fillText('💥', -16, 12);
+        } else {
+          ctx.rotate(-Math.PI / 8);
+          ctx.fillStyle = '#ef4444';
+          ctx.beginPath();
+          ctx.ellipse(0, 0, 16, 7, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.moveTo(8, -2); ctx.lineTo(-4, -12); ctx.lineTo(-8, -2);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.moveTo(-10, 0); ctx.lineTo(-16, -6); ctx.lineTo(-16, 6);
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+    }
+
+    function renderAviatorOverlay() {
+      renderAviatorCanvas();
+      const xElem = document.getElementById('aviator-x');
+      const statusElem = document.getElementById('aviator-status');
+      const actionBtn = document.getElementById('aviator-btn');
+
+      if (xElem) {
+        xElem.innerText = state.aviator.currentX.toFixed(2) + 'x';
+        xElem.className = \`text-5xl font-black font-mono \${state.aviator.status === 'CRASHED' ? 'text-red-500' : 'text-amber-400'}\`;
+      }
+      if (statusElem) {
+        statusElem.innerText = state.aviator.status === 'WAITING' ? 'WAITING FOR NEXT ROUND (5s)' : (state.aviator.status === 'FLYING' ? 'FLYING' : 'FLEW AWAY!');
+        statusElem.className = \`text-xs font-bold px-3 py-1 rounded-full \${state.aviator.status === 'FLYING' ? 'bg-amber-900/80 text-amber-300 border border-amber-500' : 'bg-red-900/80 text-red-300 border border-red-500'}\`;
+      }
+
+      if (actionBtn) {
+        if (state.aviator.status === 'WAITING') {
+          actionBtn.disabled = state.hasBetAviator;
+          actionBtn.innerHTML = state.hasBetAviator ? 'BET PLACED FOR NEXT ROUND' : \`BET ₹\${state.userBet}\`;
+          actionBtn.className = \`w-full h-14 rounded-2xl font-black text-xl tracking-wider transition-all shadow-lg \${state.hasBetAviator ? 'bg-gray-700 text-gray-400' : 'bg-red-600 text-white border-2 border-red-400'}\`;
+        } else if (state.aviator.status === 'FLYING') {
+          if (state.hasBetAviator && !state.cashedOut) {
+            actionBtn.disabled = false;
+            actionBtn.innerHTML = \`CASH OUT (₹\${(state.userBet * state.aviator.currentX).toFixed(2)})\`;
+            actionBtn.className = 'w-full h-14 rounded-2xl font-black text-xl tracking-wider shadow-lg bg-emerald-500 text-black border-2 border-green-300 animate-pulse';
+          } else if (state.nextRoundBet) {
+            actionBtn.disabled = true;
+            actionBtn.innerHTML = 'BET QUEUED FOR NEXT ROUND';
+            actionBtn.className = 'w-full h-14 rounded-2xl font-black text-lg tracking-wider shadow-lg bg-amber-700 text-amber-200 border border-amber-500';
+          } else {
+            actionBtn.disabled = false;
+            actionBtn.innerHTML = \`BET FOR NEXT ROUND (₹\${state.userBet})\`;
+            actionBtn.className = 'w-full h-14 rounded-2xl font-black text-lg tracking-wider shadow-lg bg-red-700 text-white border border-red-400';
+          }
+        } else {
+          actionBtn.disabled = true;
+          actionBtn.innerHTML = 'ROUND ENDED';
+          actionBtn.className = 'w-full h-14 rounded-2xl font-black text-xl tracking-wider shadow-lg bg-gray-800 text-gray-500';
+        }
+      }
+    }
+
+    // --- GAME 2: GUESS CORRECT (DICE) ---
+    async function playDiceGame(choice) {
+      sound.init();
+      if(state.user.balance < state.userBet) return showPopup("Insufficient Balance!", "OK");
+      if(state.diceRolling) return;
+
+      state.diceRolling = true;
+      let animInterval = setInterval(() => {
+        state.diceResults = [Math.floor(Math.random()*6)+1, Math.floor(Math.random()*6)+1];
+        sound.playCoinFlip();
+        render();
+      }, 100);
+
+      const res = await fetch('/api/play-instant', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: state.user.username, game: 'dice', betAmount: state.userBet, choice })
+      });
+      const data = await res.json();
+
+      setTimeout(() => {
+        clearInterval(animInterval);
+        state.diceRolling = false;
+        if (res.ok) {
+          state.diceResults = [data.resultMeta.dice1, data.resultMeta.dice2];
+          state.user.balance = data.newBalance;
+          render();
+          
+          setTimeout(() => {
+            if (data.won) {
+              sound.playWin();
+              showPopup(\`MATCHED! Sum is \${data.resultMeta.sum}. WON ₹\${(state.userBet * data.rewardMultiplier).toFixed(2)} (\${data.rewardMultiplier}x)!\`, 'Paisa hi Paisa');
+            } else {
+              sound.playLoss();
+              showPopup(\`MISMATCH! Sum is \${data.resultMeta.sum}. YOU LOST!\`, 'Try Again');
+            }
+          }, 500);
+        } else {
+          showPopup(data.error || 'Error', 'OK');
+        }
+      }, 1500);
+    }
+
+    // --- GAME 3: PREDICTION GRAPH ---
+    async function playPrediction(dir) {
+      sound.init();
+      if(state.user.balance < state.userBet) return showPopup("Insufficient Balance!", "OK");
+      if(state.predictionTimer > 0) return;
+
+      const startVal = state.marketHistory[state.marketHistory.length - 1];
+      state.predictionMark1 = startVal;
+      state.predictionMark2 = null;
+      state.predictionTimer = 6;
+
+      let timerInterval = setInterval(() => {
+        state.predictionTimer--;
+        sound.playMarketBeep();
+        render();
+        if(state.predictionTimer <= 0) {
+          clearInterval(timerInterval);
+          finishPrediction(dir, startVal);
+        }
+      }, 1000);
+    }
+
+    async function finishPrediction(dir, startVal) {
+      const endVal = state.marketHistory[state.marketHistory.length - 1];
+      state.predictionMark2 = endVal;
+      render();
+
+      const res = await fetch('/api/play-instant', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: state.user.username, game: 'prediction', betAmount: state.userBet, choice: { startVal, endVal, direction: dir } })
+      });
+      const data = await res.json();
+
+      setTimeout(() => {
+        if (res.ok) {
+          state.user.balance = data.newBalance;
+          if (data.won) {
+            sound.playWin();
+            showPopup(\`SUCCESS! Entry: ₹\${startVal} | Exit: ₹\${endVal}. WON ₹\${(state.userBet * 2).toFixed(2)}!\`, 'Paisa hi Paisa', () => {
+              state.predictionMark1 = null; state.predictionMark2 = null;
+            });
+          } else {
+            sound.playLoss();
+            showPopup(\`FAILED! Entry: ₹\${startVal} | Exit: ₹\${endVal}. YOU LOST!\`, 'Try Again', () => {
+              state.predictionMark1 = null; state.predictionMark2 = null;
+            });
+          }
+        } else {
+          showPopup(data.error || 'Error', 'OK');
+          state.predictionMark1 = null; state.predictionMark2 = null;
+        }
+        render();
+      }, 1000);
+    }
+
+    // --- GAME 4: CAREERBOOT ENGINE ---
+    function renderCareerBootWheelCanvas() {
+      const cvs = document.getElementById('cb-wheel-canvas');
+      if (!cvs) return;
+      const ctx = cvs.getContext('2d');
+      const dpr = window.devicePixelRatio || 2;
+      const rect = cvs.getBoundingClientRect();
+
+      cvs.width = rect.width * dpr;
+      cvs.height = rect.height * dpr;
+      ctx.scale(dpr, dpr);
+
+      const w = rect.width;
+      const h = rect.height;
+      const r = Math.min(w, h) / 2 - 12;
+      const cx = w / 2;
+      const cy = h / 2;
+
+      ctx.clearRect(0, 0, w, h);
+
+      const slices = Object.keys(CAREERBOOT_DATA);
+      const arc = (Math.PI * 2) / slices.length;
+
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(state.careerboot.wheelAngle);
+
+      slices.forEach((sliceKey, i) => {
+        const sliceStartAngle = i * arc;
+        const sliceEndAngle = sliceStartAngle + arc;
+
+        ctx.beginPath();
+        ctx.fillStyle = CAREERBOOT_DATA[sliceKey].color;
+        ctx.moveTo(0, 0);
+        ctx.arc(0, 0, r, sliceStartAngle, sliceEndAngle);
+        ctx.lineTo(0, 0);
+        ctx.fill();
+
+        ctx.strokeStyle = '#d4af37';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        const labelText = sliceKey.toUpperCase();
+        const textRadius = r * 0.62;
+        const sliceMidAngle = sliceStartAngle + arc / 2;
+
+        let fontSize = 13;
+        ctx.font = \`900 \${fontSize}px ui-sans-serif, system-ui, sans-serif\`;
+        let totalWidth = ctx.measureText(labelText).width;
+        
+        const maxAllowedArcWidth = textRadius * arc * 0.82;
+        if (totalWidth > maxAllowedArcWidth) {
+          fontSize = Math.floor(fontSize * (maxAllowedArcWidth / totalWidth));
+          ctx.font = \`900 \${Math.max(fontSize, 9)}px ui-sans-serif, system-ui, sans-serif\`;
+          totalWidth = ctx.measureText(labelText).width;
+        }
+
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.shadowColor = 'rgba(0,0,0,0.9)';
+        ctx.shadowBlur = 6;
+
+        let currentAngle = sliceMidAngle - (totalWidth / textRadius) / 2;
+
+        for (let j = 0; j < labelText.length; j++) {
+          const char = labelText[j];
+          const charWidth = ctx.measureText(char).width;
+          const charAngle = currentAngle + (charWidth / 2) / textRadius;
+
+          ctx.save();
+          ctx.rotate(charAngle);
+          ctx.translate(textRadius, 0);
+          ctx.rotate(Math.PI / 2);
+          ctx.fillText(char, 0, 0);
+          ctx.restore();
+
+          currentAngle += charWidth / textRadius;
+        }
+      });
+
+      ctx.restore();
+
+      ctx.fillStyle = '#fcf6ba';
+      ctx.beginPath();
+      ctx.moveTo(cx - 12, cy - r - 6);
+      ctx.lineTo(cx + 12, cy - r - 6);
+      ctx.lineTo(cx, cy - r + 18);
+      ctx.fill();
+      ctx.strokeStyle = '#800a0a';
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+    }
+
+    async function spinCareerBootWheel() {
+      sound.init();
+      if (state.user.balance < state.userBet) return showPopup("Insufficient Balance!", "OK");
+      if (state.careerboot.spinning) return;
+
+      state.careerboot.spinning = true;
+      const slices = Object.keys(CAREERBOOT_DATA);
+      const chosenIndex = Math.floor(Math.random() * slices.length);
+      const chosenSlice = slices[chosenIndex];
+
+      const arc = (Math.PI * 2) / slices.length;
+      const targetSliceCenter = chosenIndex * arc + (arc / 2);
+      let targetAngle = (Math.PI * 1.5) - targetSliceCenter;
+      if (targetAngle < 0) targetAngle += Math.PI * 2;
+
+      const totalSpins = 5 * Math.PI * 2;
+      const finalAngle = state.careerboot.wheelAngle + totalSpins + targetAngle - (state.careerboot.wheelAngle % (Math.PI * 2));
+
+      let startTime = null;
+      const duration = 3000;
+
+      function animateSpin(timestamp) {
+        if (!startTime) startTime = timestamp;
+        let elapsed = timestamp - startTime;
+        let progress = Math.min(elapsed / duration, 1);
+        let easeOut = 1 - Math.pow(1 - progress, 3);
+
+        state.careerboot.wheelAngle = easeOut * finalAngle;
+        sound.playCoinFlip();
+        renderCareerBootWheelCanvas();
+
+        if (progress < 1) {
+          requestAnimationFrame(animateSpin);
+        } else {
+          state.careerboot.spinning = false;
+          state.careerboot.selectedSlice = chosenSlice;
+          state.careerboot.stage = 'LESSON';
+          render();
+        }
+      }
+
+      requestAnimationFrame(animateSpin);
+    }
+
+    function startCareerBootMCQs() {
+      const sliceObj = CAREERBOOT_DATA[state.careerboot.selectedSlice];
+      state.careerboot.round = 1;
+      state.careerboot.questionIndex = 0;
+      state.careerboot.accumulatedMultiplier = 0;
+      state.careerboot.selectedAnswer = null;
+      state.careerboot.isAnswered = false;
+      state.careerboot.askedQuestionIdsThisGame = [];
+
+      const seenSet = new Set(state.user.seenQuestions || []);
+      
+      let availableMCQs = sliceObj.mcqs.filter(m => !seenSet.has(m.id));
+
+      if (availableMCQs.length < 15) {
+        const catPrefixes = { 'Grammar': 'GMR_', 'Vocabulary': 'VOC_', 'MS Excel': 'EXC_', 'Business analytics': 'BSA_' };
+        const prefix = catPrefixes[state.careerboot.selectedSlice];
+        if (prefix) {
+          state.user.seenQuestions = (state.user.seenQuestions || []).filter(id => !id.startsWith(prefix));
+        }
+        availableMCQs = [...sliceObj.mcqs];
+      }
+
+      const shuffled = [...availableMCQs];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+
+      state.careerboot.activeQuestions = shuffled.slice(0, 15);
+      state.careerboot.askedQuestionIdsThisGame = state.careerboot.activeQuestions.map(q => q.id);
+
+      state.careerboot.stage = 'MCQ';
+      render();
+    }
+
+    async function handleCareerBootAnswer(selectedOptIndex) {
+      if (state.careerboot.isAnswered) return;
+
+      state.careerboot.selectedAnswer = selectedOptIndex;
+      state.careerboot.isAnswered = true;
+
+      const currentRound = state.careerboot.round;
+      const qIdx = (currentRound - 1) * 5 + state.careerboot.questionIndex;
+      const currentQ = state.careerboot.activeQuestions[qIdx];
+
+      render();
+
       if (selectedOptIndex === currentQ.a) {
         sound.playWin();
         const roundMult = currentRound === 1 ? 1.40 : (currentRound === 2 ? 1.60 : 2.00);
@@ -1306,6 +2320,7 @@ app.get('/', (req, res) => {
           }
           render();
         }, 1000);
+
 
       } else {
         sound.playLoss();
