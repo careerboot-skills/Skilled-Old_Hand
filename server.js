@@ -1585,37 +1585,30 @@ app.get('/', (req, res) => {
           html = \`
             <div class="h-full w-full flex flex-col bg-[#120303]">
               <div class="h-14 px-3 bg-red-950 border-b border-amber-500/40 flex items-center justify-between">
-                <div class="flex flex-col">
-                  <span class="text-[10px] text-amber-300 font-bold">ROUND \${cb.round} / 3</span>
-                  <span class="text-xs font-black text-white">Q\${cb.questionIndex + 1} of 5</span>
-                </div>
-                <span class="font-black gold-text uppercase">\${cb.selectedSlice}</span>
+                <button onclick="state.careerboot.stage='WHEEL'; render();" class="px-3 py-1 bg-red-900 border border-amber-500/40 rounded-xl text-xs font-bold text-white">Quit</button>
+                <span class="font-black text-amber-300 text-sm">ROUND \${cb.round}/3 • Q\${cb.questionIndex + 1}/5</span>
                 <span class="font-mono text-sm text-green-400 font-bold">₹\${state.user.balance.toFixed(2)}</span>
               </div>
-              
-              <div class="flex-1 p-5 flex flex-col justify-between overflow-y-auto">
-                <div class="space-y-4">
-                  <div class="flex justify-between items-center text-xs font-bold text-amber-300">
-                    <span>ACCUMULATED MULTIPLIER:</span>
-                    <span class="font-mono text-base text-yellow-400">\${cb.accumulatedMultiplier.toFixed(2)}x</span>
+              <div class="flex-1 p-5 overflow-y-auto flex flex-col justify-between space-y-4">
+                <div class="tomato-card p-5 rounded-3xl space-y-4">
+                  <div class="flex items-center justify-between text-xs text-amber-300/80 font-bold border-b border-amber-500/30 pb-2">
+                    <span>\${cb.selectedSlice.toUpperCase()}</span>
+                    <span>Accumulated: \${cb.accumulatedMultiplier.toFixed(2)}x</span>
                   </div>
-
-                  <div class="tomato-card p-5 rounded-2xl space-y-2">
-                    <span class="text-xs font-bold text-amber-300/70">QUESTION \${qIdx + 1}</span>
-                    <p class="text-base font-black text-white leading-snug">\${currentQ ? currentQ.q : ''}</p>
-                  </div>
-
-                  <div class="space-y-2.5">
-                    \${currentQ ? currentQ.opts.map((opt, oIdx) => {
+                  <h2 class="text-base font-bold text-white leading-snug">\${currentQ ? currentQ.q : ''}</h2>
+                  <div class="space-y-2.5 pt-2">
+                    \${currentQ ? currentQ.opts.map((opt, idx) => {
                       let btnStyle = "bg-black/60 border-amber-500/40 text-amber-100";
                       if (cb.isAnswered) {
-                        if (oIdx === currentQ.a) btnStyle = "bg-emerald-600 border-green-300 text-white font-bold";
-                        else if (oIdx === cb.selectedAnswer) btnStyle = "bg-red-700 border-red-400 text-white font-bold";
+                        if (idx === currentQ.a) {
+                          btnStyle = "bg-emerald-600 border-emerald-400 text-white font-bold";
+                        } else if (idx === cb.selectedAnswer) {
+                          btnStyle = "bg-red-600 border-red-400 text-white font-bold";
+                        }
                       }
                       return \`
-                        <button onclick="handleCareerBootAnswer(\${oIdx})" \${cb.isAnswered ? 'disabled' : ''} class="w-full p-4 rounded-xl border text-left text-sm transition-all shadow-md active:scale-95 flex items-center gap-3 \${btnStyle}">
-                          <span class="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center text-xs font-bold shrink-0">\${String.fromCharCode(65 + oIdx)}</span>
-                          <span>\${opt}</span>
+                        <button onclick="handleCareerBootAnswer(\${idx})" \${cb.isAnswered ? 'disabled' : ''} class="w-full text-left p-3.5 rounded-2xl border \${btnStyle} text-sm font-semibold active:scale-[0.98] transition-all">
+                          \${['A', 'B', 'C', 'D'][idx]}. \${opt}
                         </button>
                       \`;
                     }).join('') : ''}
@@ -1632,30 +1625,25 @@ app.get('/', (req, res) => {
           <div class="h-full w-full flex flex-col bg-[#120303]">
             <div class="h-14 px-3 bg-red-950 border-b border-amber-500/40 flex items-center justify-between">
               <button onclick="switchView('lobby')" class="px-3 py-1 bg-red-900 border border-amber-500/40 rounded-xl text-xs font-bold text-white">Lobby</button>
-              <span class="font-black gold-text">AVIATOR 24x7</span>
+              <span class="font-black gold-text">AVIATOR 🚀</span>
               <span class="font-mono text-sm text-green-400 font-bold">₹\${state.user.balance.toFixed(2)}</span>
             </div>
-            
-            <div class="flex-1 p-3 flex flex-col justify-between space-y-3">
-              <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1">
+            <div class="flex-1 p-4 flex flex-col justify-between space-y-3 overflow-y-auto">
+              <div class="flex gap-2 overflow-x-auto no-scrollbar py-1">
                 \${state.aviator.history.map(x => \`
-                  <span class="px-2 py-0.5 rounded-md text-[10px] font-mono font-bold shrink-0 \${x >= 2 ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'bg-slate-800 text-slate-300'}">\${x.toFixed(2)}x</span>
+                  <span class="px-2.5 py-1 rounded-lg text-xs font-mono font-bold shrink-0 \${x >= 2 ? 'bg-amber-900/80 text-amber-300 border border-amber-500' : 'bg-red-950 text-red-300 border border-red-900'}">\${x.toFixed(2)}x</span>
                 \`).join('')}
               </div>
-
-              <div class="relative flex-1 bg-slate-950 rounded-2xl border border-slate-800 overflow-hidden flex flex-col items-center justify-center">
+              <div class="relative flex-1 bg-black/60 rounded-3xl border border-amber-500/30 overflow-hidden flex flex-col items-center justify-center min-h-[220px]">
                 <canvas id="aviator-canvas" class="absolute inset-0 w-full h-full"></canvas>
-                <div class="z-10 text-center space-y-1">
+                <div class="z-10 text-center space-y-2">
                   <div id="aviator-x" class="text-5xl font-black font-mono text-amber-400">1.00x</div>
-                  <div id="aviator-status" class="text-xs font-bold px-3 py-1 rounded-full bg-amber-900/80 text-amber-300 border border-amber-500">WAITING</div>
+                  <div><span id="aviator-status" class="text-xs font-bold px-3 py-1 rounded-full bg-amber-900/80 text-amber-300 border border-amber-500">WAITING FOR NEXT ROUND (5s)</span></div>
                 </div>
               </div>
-
-              <div class="flex flex-col items-center gap-3">
+              <div class="space-y-3 flex flex-col items-center">
                 \${renderBetControllerUI()}
-                <button id="aviator-btn" onclick="handleAviatorAction()" class="w-full h-14 rounded-2xl font-black text-xl tracking-wider shadow-lg gold-gradient text-black">
-                  BET ₹\${state.userBet}
-                </button>
+                <button id="aviator-btn" onclick="handleAviatorAction()" class="w-full h-14 rounded-2xl font-black text-xl tracking-wider shadow-lg bg-red-600 text-white border-2 border-red-400">BET ₹\${state.userBet}</button>
               </div>
             </div>
           </div>
@@ -1670,32 +1658,25 @@ app.get('/', (req, res) => {
               <span class="font-black gold-text">GUESS CORRECT 🎲</span>
               <span class="font-mono text-sm text-green-400 font-bold">₹\${state.user.balance.toFixed(2)}</span>
             </div>
-
-            <div class="flex-1 p-5 flex flex-col items-center justify-between">
-              <div class="text-center space-y-1">
-                <h2 class="text-lg font-black text-amber-300">BIG OR SMALL DICE</h2>
-                <p class="text-xs text-amber-200/60">Small (2-6) | Big (7-12)</p>
+            <div class="flex-1 p-6 flex flex-col items-center justify-between space-y-4">
+              <div class="tomato-card p-6 rounded-3xl w-full text-center space-y-4">
+                <span class="text-xs font-bold text-amber-300 tracking-widest uppercase">2 Dice Roll Sum</span>
+                <div class="flex justify-center gap-6 py-4">
+                  <div class="w-16 h-16 bg-red-900 border-2 border-amber-400 rounded-2xl flex items-center justify-center text-3xl font-black text-white shadow-xl">\${state.diceResults[0]}</div>
+                  <div class="w-16 h-16 bg-red-900 border-2 border-amber-400 rounded-2xl flex items-center justify-center text-3xl font-black text-white shadow-xl">\${state.diceResults[1]}</div>
+                </div>
+                <div class="text-sm font-bold text-amber-200">SUM = \${state.diceResults[0] + state.diceResults[1]}</div>
               </div>
-
-              <div class="flex items-center justify-center gap-6 my-6">
-                <div class="w-20 h-20 bg-gradient-to-br from-red-600 to-red-950 rounded-2xl border-2 border-amber-400 flex items-center justify-center text-4xl font-black text-amber-300 shadow-2xl">
-                  \${state.diceResults[0]}
-                </div>
-                <div class="w-20 h-20 bg-gradient-to-br from-red-600 to-red-950 rounded-2xl border-2 border-amber-400 flex items-center justify-center text-4xl font-black text-amber-300 shadow-2xl">
-                  \${state.diceResults[1]}
-                </div>
-              </div>
-
-              <div class="w-full space-y-4 flex flex-col items-center">
-                \${renderBetControllerUI()}
-                <div class="grid grid-cols-2 gap-4 w-full">
-                  <button onclick="playDiceGame('small')" \${state.diceRolling ? 'disabled' : ''} class="h-16 rounded-2xl bg-gradient-to-r from-blue-900 to-indigo-950 border-2 border-blue-400 text-white font-black text-lg active:scale-95 shadow-xl">
-                    SMALL (2-6)
-                  </button>
-                  <button onclick="playDiceGame('big')" \${state.diceRolling ? 'disabled' : ''} class="h-16 rounded-2xl bg-gradient-to-r from-amber-700 to-yellow-900 border-2 border-amber-400 text-white font-black text-lg active:scale-95 shadow-xl">
-                    BIG (7-12)
-                  </button>
-                </div>
+              \${renderBetControllerUI()}
+              <div class="grid grid-cols-2 gap-4 w-full">
+                <button onclick="playDiceGame('small')" \${state.diceRolling ? 'disabled' : ''} class="tomato-card p-5 rounded-3xl text-center active:scale-95 transition-all">
+                  <div class="text-2xl font-black text-amber-300">SMALL</div>
+                  <div class="text-[10px] text-amber-100/70 mt-1">Sum: 2 to 6</div>
+                </button>
+                <button onclick="playDiceGame('big')" \${state.diceRolling ? 'disabled' : ''} class="tomato-card p-5 rounded-3xl text-center active:scale-95 transition-all">
+                  <div class="text-2xl font-black text-amber-300">BIG</div>
+                  <div class="text-[10px] text-amber-100/70 mt-1">Sum: 7 to 12</div>
+                </button>
               </div>
             </div>
           </div>
@@ -1707,38 +1688,22 @@ app.get('/', (req, res) => {
           <div class="h-full w-full flex flex-col bg-[#120303]">
             <div class="h-14 px-3 bg-red-950 border-b border-amber-500/40 flex items-center justify-between">
               <button onclick="switchView('lobby')" class="px-3 py-1 bg-red-900 border border-amber-500/40 rounded-xl text-xs font-bold text-white">Lobby</button>
-              <span class="font-black gold-text">PREDICTION GRAPH 📈</span>
+              <span class="font-black gold-text">PREDICTION 📈</span>
               <span class="font-mono text-sm text-green-400 font-bold">₹\${state.user.balance.toFixed(2)}</span>
             </div>
-
-            <div class="flex-1 p-3 flex flex-col justify-between space-y-3">
-              <div class="flex justify-between items-center text-xs font-bold px-2">
-                <span class="text-amber-300">LIVE MARKET RATE</span>
-                <span class="font-mono text-green-400">₹\${state.marketHistory[state.marketHistory.length - 1]}</span>
-              </div>
-
-              <div class="relative flex-1 bg-slate-950 rounded-2xl border border-slate-800 overflow-hidden">
+            <div class="flex-1 p-4 flex flex-col justify-between space-y-3">
+              <div class="relative flex-1 bg-black/60 rounded-3xl border border-amber-500/30 overflow-hidden min-h-[220px]">
                 <canvas id="market-canvas" class="w-full h-full"></canvas>
                 \${state.predictionTimer > 0 ? \`
-                  <div class="absolute inset-0 bg-black/40 backdrop-blur-[1px] flex items-center justify-center">
-                    <div class="text-center">
-                      <div class="text-4xl font-black font-mono text-amber-300 animate-bounce">\${state.predictionTimer}s</div>
-                      <div class="text-xs text-amber-200 font-bold">LOCKING RESULT...</div>
-                    </div>
+                  <div class="absolute top-3 right-3 bg-amber-900/90 border border-amber-500 px-3 py-1 rounded-full text-xs font-bold text-amber-300 animate-pulse">
+                    Timer: \${state.predictionTimer}s
                   </div>
                 \` : ''}
               </div>
-
-              <div class="flex flex-col items-center gap-3">
-                \${renderBetControllerUI()}
-                <div class="grid grid-cols-2 gap-3 w-full">
-                  <button onclick="playPrediction('up')" \${state.predictionTimer > 0 ? 'disabled' : ''} class="h-14 rounded-2xl bg-emerald-600 border-2 border-green-300 text-black font-black text-lg active:scale-95 shadow-xl">
-                    UP 📈
-                  </button>
-                  <button onclick="playPrediction('down')" \${state.predictionTimer > 0 ? 'disabled' : ''} class="h-14 rounded-2xl bg-red-600 border-2 border-red-300 text-white font-black text-lg active:scale-95 shadow-xl">
-                    DOWN 📉
-                  </button>
-                </div>
+              \${renderBetControllerUI()}
+              <div class="grid grid-cols-2 gap-4 w-full">
+                <button onclick="playPrediction('up')" \${state.predictionTimer > 0 ? 'disabled' : ''} class="py-4 bg-emerald-600 border-2 border-green-400 text-white font-black text-lg rounded-2xl shadow-lg active:scale-95">HIGH ⬆️</button>
+                <button onclick="playPrediction('down')" \${state.predictionTimer > 0 ? 'disabled' : ''} class="py-4 bg-red-600 border-2 border-red-400 text-white font-black text-lg rounded-2xl shadow-lg active:scale-95">LOW ⬇️</button>
               </div>
             </div>
           </div>
@@ -1747,20 +1712,14 @@ app.get('/', (req, res) => {
 
       else if (state.currentView === 'pwchange') {
         html = \`
-          <div class="h-full w-full flex flex-col bg-[#120303]">
-            <div class="h-14 px-3 bg-red-950 border-b border-amber-500/40 flex items-center justify-between">
-              <button onclick="switchView('lobby')" class="px-3 py-1 bg-red-900 border border-amber-500/40 rounded-xl text-xs font-bold text-white">Back</button>
-              <span class="font-black gold-text">CHANGE PASSWORD</span>
-              <div></div>
-            </div>
-
-            <div class="flex-1 p-6 flex items-center justify-center">
-              <div class="tomato-card p-6 rounded-3xl w-full space-y-4">
-                <input id="opw" type="password" placeholder="Old Password" class="w-full p-3 rounded-xl bg-black/60 border border-amber-500/40 text-white placeholder-amber-200/40 text-sm outline-none">
-                <input id="npw" type="password" placeholder="New Password" class="w-full p-3 rounded-xl bg-black/60 border border-amber-500/40 text-white placeholder-amber-200/40 text-sm outline-none">
-                <button onclick="changePassword()" class="w-full gold-gradient text-black font-black py-3 rounded-xl shadow-xl">
-                  UPDATE PASSWORD
-                </button>
+          <div class="h-full w-full flex flex-col bg-[#120303] justify-center p-6">
+            <div class="tomato-card p-6 rounded-3xl space-y-4 text-center">
+              <h2 class="text-xl font-black text-amber-300">Change Password</h2>
+              <input id="opw" type="password" placeholder="Old Password" class="w-full p-3 rounded-2xl bg-black/60 border border-amber-500/40 text-white text-sm outline-none">
+              <input id="npw" type="password" placeholder="New Password" class="w-full p-3 rounded-2xl bg-black/60 border border-amber-500/40 text-white text-sm outline-none">
+              <div class="flex gap-2">
+                <button onclick="switchView('lobby')" class="w-1/2 bg-gray-800 text-gray-300 font-bold py-3 rounded-2xl">Back</button>
+                <button onclick="changePassword()" class="w-1/2 gold-gradient text-black font-black py-3 rounded-2xl">Update</button>
               </div>
             </div>
           </div>
@@ -1770,56 +1729,51 @@ app.get('/', (req, res) => {
       else if (state.currentView === 'admin') {
         html = \`
           <div class="h-full w-full flex flex-col bg-[#120303]">
-            <div class="h-14 px-3 bg-red-950 border-b border-amber-500/40 flex items-center justify-between">
-              <span class="font-black gold-text">ADMIN PANEL</span>
-              <button onclick="switchView('login')" class="px-2.5 py-1 bg-red-900/50 border border-red-500/50 rounded-lg text-[10px] font-bold text-red-300">Logout</button>
+            <div class="h-16 px-4 bg-red-950 border-b border-amber-500/40 flex items-center justify-between">
+              <span class="font-black gold-text text-lg">ADMIN PANEL</span>
+              <button onclick="switchView('login')" class="px-3 py-1 bg-red-900 border border-red-500 rounded-lg text-xs font-bold text-white">Logout</button>
             </div>
-
-            <div class="flex-1 p-4 space-y-4 overflow-y-auto">
-              <div class="tomato-card p-4 rounded-2xl space-y-3">
-                <h3 class="text-sm font-bold text-amber-300">CREATE PLAYER ACCOUNT</h3>
-                <input id="nu" type="text" placeholder="New Username" class="w-full p-2.5 rounded-xl bg-black/60 border border-amber-500/40 text-white text-xs outline-none">
-                <input id="np" type="password" placeholder="New Password" class="w-full p-2.5 rounded-xl bg-black/60 border border-amber-500/40 text-white text-xs outline-none">
-                <button onclick="
-                  const u=document.getElementById('nu').value;
-                  const p=document.getElementById('np').value;
-                  fetch('/api/admin/create-user', {
-                    method:'POST', headers:{'Content-Type':'application/json'},
-                    body: JSON.stringify({username:u, password:p})
-                  }).then(r=>r.json()).then(d=>{
-                    if(d.error) showPopup(d.error, 'OK');
-                    else { showPopup('User Created!', 'OK'); fetchAdminUsers(); }
-                  });
-                " class="w-full gold-gradient text-black font-bold py-2.5 rounded-xl text-xs">CREATE PLAYER</button>
-              </div>
-
-              <div class="tomato-card p-4 rounded-2xl space-y-3">
-                <h3 class="text-sm font-bold text-amber-300">MANAGED PLAYERS</h3>
-                <div class="space-y-2 max-h-60 overflow-y-auto">
+            <div class="flex border-b border-amber-500/30">
+              <button onclick="state.adminSubTab='users'; render();" class="w-1/2 py-3 font-bold text-sm \${state.adminSubTab==='users'?'text-amber-300 border-b-2 border-amber-400':'text-gray-400'}">Users</button>
+              <button onclick="state.adminSubTab='create'; render();" class="w-1/2 py-3 font-bold text-sm \${state.adminSubTab==='create'?'text-amber-300 border-b-2 border-amber-400':'text-gray-400'}">Create User</button>
+            </div>
+            <div class="flex-1 p-4 overflow-y-auto">
+              \${state.adminSubTab === 'users' ? \`
+                <div class="space-y-3">
                   \${state.adminUsers.map(u => \`
-                    <div class="bg-black/60 p-2.5 rounded-xl border border-amber-500/20 flex items-center justify-between">
+                    <div class="tomato-card p-4 rounded-2xl flex items-center justify-between">
                       <div>
-                        <div class="text-xs font-bold text-white">\${u.username}</div>
-                        <div class="text-[10px] text-green-400 font-mono">₹\${u.balance.toFixed(2)}</div>
+                        <div class="font-bold text-white">\${u.username}</div>
+                        <div class="text-xs text-amber-300 font-mono">Balance: ₹\${u.balance}</div>
                       </div>
-                      <div class="flex gap-1">
-                        <button onclick="
-                          fetch('/api/admin/update-balance', {
-                            method:'POST', headers:{'Content-Type':'application/json'},
-                            body: JSON.stringify({username:'\${u.username}', amount:500})
-                          }).then(()=>fetchAdminUsers());
-                        " class="px-2 py-1 bg-green-800 text-white text-[10px] font-bold rounded-lg">+500</button>
-                        <button onclick="
-                          fetch('/api/admin/update-balance', {
-                            method:'POST', headers:{'Content-Type':'application/json'},
-                            body: JSON.stringify({username:'\${u.username}', amount:-500})
-                          }).then(()=>fetchAdminUsers());
-                        " class="px-2 py-1 bg-red-800 text-white text-[10px] font-bold rounded-lg">-500</button>
-                      </div>
+                      <button onclick="
+                        const amt = prompt('Enter amount to add/subtract:');
+                        if(amt) fetch('/api/admin/update-balance', {
+                          method: 'POST', headers: {'Content-Type': 'application/json'},
+                          body: JSON.stringify({ username: '\${u.username}', amount: parseFloat(amt) })
+                        }).then(()=>fetchAdminUsers());
+                      " class="px-3 py-1.5 bg-amber-600 text-black font-black rounded-xl text-xs">+/- Balance</button>
                     </div>
                   \`).join('')}
                 </div>
-              </div>
+              \` : \`
+                <div class="tomato-card p-6 rounded-3xl space-y-4">
+                  <h3 class="font-bold text-amber-300">Create New Player</h3>
+                  <input id="nu" type="text" placeholder="Username" class="w-full p-3 rounded-xl bg-black/60 border border-amber-500/40 text-white text-sm outline-none">
+                  <input id="np" type="password" placeholder="Password" class="w-full p-3 rounded-xl bg-black/60 border border-amber-500/40 text-white text-sm outline-none">
+                  <button onclick="
+                    const username = document.getElementById('nu').value;
+                    const password = document.getElementById('np').value;
+                    fetch('/api/admin/create-user', {
+                      method: 'POST', headers: {'Content-Type': 'application/json'},
+                      body: JSON.stringify({ username, password })
+                    }).then(res=>res.json()).then(data=>{
+                      if(data.error) showPopup(data.error, 'OK');
+                      else { showPopup('User Created!', 'OK'); fetchAdminUsers(); }
+                    });
+                  " class="w-full gold-gradient text-black font-black py-3 rounded-xl">Create Account</button>
+                </div>
+              \`}
             </div>
           </div>
         \`;
@@ -1839,20 +1793,8 @@ app.get('/', (req, res) => {
   `);
 });
 
-// ==========================================
-// DB CONNECTION & SERVER START
-// ==========================================
 const PORT = process.env.PORT || 3000;
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/skilled_old_hand';
-
-mongoose.connect(MONGO_URI)
-  .then(() => {
-    console.log("Connected to MongoDB successfully.");
-    server.listen(PORT, () => {
-      console.log(`Server listening on port ${PORT}`);
-      startAviatorLoop();
-    });
-  })
-  .catch(err => {
-    console.error("MongoDB connection error:", err.message);
-  });
+server.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+  startAviatorLoop();
+});
