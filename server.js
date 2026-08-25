@@ -254,7 +254,7 @@ app.get('/', (req, res) => {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Skilled Old Hand ðŸ¤‘</title>
+  <title>Skilled Old Hand 🤑</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     * { box-sizing: border-box; touch-action: manipulation; }
@@ -874,7 +874,7 @@ app.get('/', (req, res) => {
           const winAmt = +(state.userBet * state.aviator.currentX).toFixed(2);
           state.user.balance += (winAmt - state.userBet);
           sound.playWin();
-          showPopup(\`CASHED OUT AT \${state.aviator.currentX.toFixed(2)}x! WON â‚¹\${winAmt}\`, 'Paisa hi Paisa');
+          showPopup(\`CASHED OUT AT \${state.aviator.currentX.toFixed(2)}x! WON ₹\${winAmt}\`, 'Paisa hi Paisa');
           state.hasBetAviator = false;
           renderAviatorOverlay();
         } else if (!state.hasBetAviator && !state.nextRoundBet) {
@@ -918,7 +918,7 @@ app.get('/', (req, res) => {
         ctx.translate(endX, endY);
         if(state.aviator.status === 'CRASHED') {
           ctx.font = '32px sans-serif';
-          ctx.fillText('ðŸ’¥', -16, 12);
+          ctx.fillText('💥', -16, 12);
         } else {
           ctx.rotate(-Math.PI / 8);
           ctx.fillStyle = '#ef4444';
@@ -955,12 +955,12 @@ app.get('/', (req, res) => {
       if (actionBtn) {
         if (state.aviator.status === 'WAITING') {
           actionBtn.disabled = state.hasBetAviator;
-          actionBtn.innerHTML = state.hasBetAviator ? 'BET PLACED FOR NEXT ROUND' : \`BET â‚¹\${state.userBet}\`;
+          actionBtn.innerHTML = state.hasBetAviator ? 'BET PLACED FOR NEXT ROUND' : \`BET ₹\${state.userBet}\`;
           actionBtn.className = \`w-full h-14 rounded-2xl font-black text-xl tracking-wider transition-all shadow-lg \${state.hasBetAviator ? 'bg-gray-700 text-gray-400' : 'bg-red-600 text-white border-2 border-red-400'}\`;
         } else if (state.aviator.status === 'FLYING') {
           if (state.hasBetAviator && !state.cashedOut) {
             actionBtn.disabled = false;
-            actionBtn.innerHTML = \`CASH OUT (â‚¹\${(state.userBet * state.aviator.currentX).toFixed(2)})\`;
+            actionBtn.innerHTML = \`CASH OUT (₹\${(state.userBet * state.aviator.currentX).toFixed(2)})\`;
             actionBtn.className = 'w-full h-14 rounded-2xl font-black text-xl tracking-wider shadow-lg bg-emerald-500 text-black border-2 border-green-300 animate-pulse';
           } else if (state.nextRoundBet) {
             actionBtn.disabled = true;
@@ -968,7 +968,7 @@ app.get('/', (req, res) => {
             actionBtn.className = 'w-full h-14 rounded-2xl font-black text-lg tracking-wider shadow-lg bg-amber-700 text-amber-200 border border-amber-500';
           } else {
             actionBtn.disabled = false;
-            actionBtn.innerHTML = \`BET FOR NEXT ROUND (â‚¹\${state.userBet})\`;
+            actionBtn.innerHTML = \`BET FOR NEXT ROUND (₹\${state.userBet})\`;
             actionBtn.className = 'w-full h-14 rounded-2xl font-black text-lg tracking-wider shadow-lg bg-red-700 text-white border border-red-400';
           }
         } else {
@@ -1009,7 +1009,7 @@ app.get('/', (req, res) => {
           setTimeout(() => {
             if (data.won) {
               sound.playWin();
-              showPopup(\`MATCHED! Sum is \${data.resultMeta.sum}. WON â‚¹\${(state.userBet * data.rewardMultiplier).toFixed(2)} (\${data.rewardMultiplier}x)!\`, 'Paisa hi Paisa');
+              showPopup(\`MATCHED! Sum is \${data.resultMeta.sum}. WON ₹\${(state.userBet * data.rewardMultiplier).toFixed(2)} (\${data.rewardMultiplier}x)!\`, 'Paisa hi Paisa');
             } else {
               sound.playLoss();
               showPopup(\`MISMATCH! Sum is \${data.resultMeta.sum}. YOU LOST!\`, 'Try Again');
@@ -1059,12 +1059,12 @@ app.get('/', (req, res) => {
           state.user.balance = data.newBalance;
           if (data.won) {
             sound.playWin();
-            showPopup(\`SUCCESS! Entry: â‚¹\${startVal} | Exit: â‚¹\${endVal}. WON â‚¹\${(state.userBet * 2).toFixed(2)}!\`, 'Paisa hi Paisa', () => {
+            showPopup(\`SUCCESS! Entry: ₹\${startVal} | Exit: ₹\${endVal}. WON ₹\${(state.userBet * 2).toFixed(2)}!\`, 'Paisa hi Paisa', () => {
               state.predictionMark1 = null; state.predictionMark2 = null;
             });
           } else {
             sound.playLoss();
-            showPopup(\`FAILED! Entry: â‚¹\${startVal} | Exit: â‚¹\${endVal}. YOU LOST!\`, 'Try Again', () => {
+            showPopup(\`FAILED! Entry: ₹\${startVal} | Exit: ₹\${endVal}. YOU LOST!\`, 'Try Again', () => {
               state.predictionMark1 = null; state.predictionMark2 = null;
             });
           }
@@ -1299,7 +1299,7 @@ app.get('/', (req, res) => {
               }
 
               sound.playWin();
-              showPopup(\`ALL ROUNDS PASSED! Total Multiplier \${finalMult.toFixed(2)}x! WON â‚¹\${(state.userBet * finalMult).toFixed(2)}!\`, 'Paisa hi Paisa', () => {
+              showPopup(\`ALL ROUNDS PASSED! Total Multiplier \${finalMult.toFixed(2)}x! WON ₹\${(state.userBet * finalMult).toFixed(2)}!\`, 'Paisa hi Paisa', () => {
                 state.careerboot.stage = 'WHEEL';
               });
             }
@@ -1329,7 +1329,7 @@ app.get('/', (req, res) => {
         }
 
         setTimeout(() => {
-          showPopup(\`WRONG ANSWER! Correct answer highlighted in green. YOU LOST â‚¹\${state.userBet}.\`, 'Try Again', () => {
+          showPopup(\`WRONG ANSWER! Correct answer highlighted in green. YOU LOST ₹\${state.userBet}.\`, 'Try Again', () => {
             state.careerboot.selectedAnswer = null;
             state.careerboot.isAnswered = false;
             state.careerboot.stage = 'WHEEL';
@@ -1421,7 +1421,7 @@ app.get('/', (req, res) => {
       ctx.fillStyle = '#ffffff';
       ctx.fill();
 
-      drawRoundedRect(ctx, lastX - 68, lastY - 26, 62, 20, 6, '#22c55e', '#000000', 'â‚¹' + lastVal);
+      drawRoundedRect(ctx, lastX - 68, lastY - 26, 62, 20, 6, '#22c55e', '#000000', '₹' + lastVal);
 
       if (state.predictionMark1) {
         let y1 = h - ((state.predictionMark1 - minVal) / range) * (h - 30) - 15;
@@ -1436,7 +1436,7 @@ app.get('/', (req, res) => {
         ctx.setLineDash([]);
         ctx.shadowBlur = 0;
 
-        drawRoundedRect(ctx, 8, y1 - 20, 100, 18, 4, '#eab308', '#000000', 'ENTRY: â‚¹' + state.predictionMark1);
+        drawRoundedRect(ctx, 8, y1 - 20, 100, 18, 4, '#eab308', '#000000', 'ENTRY: ₹' + state.predictionMark1);
       }
 
       if (state.predictionMark2) {
@@ -1452,7 +1452,7 @@ app.get('/', (req, res) => {
         ctx.setLineDash([]);
         ctx.shadowBlur = 0;
 
-        drawRoundedRect(ctx, w - 108, y2 - 20, 100, 18, 4, '#06b6d4', '#000000', 'EXIT: â‚¹' + state.predictionMark2);
+        drawRoundedRect(ctx, w - 108, y2 - 20, 100, 18, 4, '#06b6d4', '#000000', 'EXIT: ₹' + state.predictionMark2);
       }
     }
 
@@ -1481,7 +1481,7 @@ app.get('/', (req, res) => {
         html = \`
           <div class="h-full w-full flex flex-col items-center justify-center p-6 bg-gradient-to-b from-[#2a0404] to-[#0d0202]">
             <div class="tomato-card p-8 rounded-3xl w-full text-center space-y-5">
-              <div class="text-6xl">ðŸ¤‘</div>
+              <div class="text-6xl">🤑</div>
               <div>
                 <h1 class="text-3xl font-black gold-text tracking-wider">Skilled Old Hand</h1>
                 <p class="text-xs font-semibold text-amber-200/70 mt-1">Shree Ganesh Karte Hai</p>
@@ -1491,7 +1491,7 @@ app.get('/', (req, res) => {
                 <input id="p" oninput="checkLoginInputsDirectly()" type="password" placeholder="Password" class="w-full p-4 rounded-2xl bg-black/60 border border-amber-500/40 text-white placeholder-amber-200/40 text-sm outline-none">
               </div>
               <button id="lbtn" onclick="handleLogin()" class="hidden w-full gold-gradient text-black font-black py-4 rounded-2xl shadow-xl text-lg">
-                Paisa hi Paisa Hoga ðŸ’°
+                Paisa hi Paisa Hoga 💰
               </button>
             </div>
           </div>
@@ -1502,10 +1502,10 @@ app.get('/', (req, res) => {
         html = \`
           <div class="h-full w-full flex flex-col bg-[#120303]">
             <div class="h-16 px-4 bg-gradient-to-r from-red-950 via-black to-red-950 border-b border-amber-500/40 flex items-center justify-between shadow-lg">
-              <span class="font-black text-lg gold-text">Skilled Old Hand ðŸ¤‘</span>
+              <span class="font-black text-lg gold-text">Skilled Old Hand 🤑</span>
               <div class="flex items-center gap-2">
                 <div class="bg-black/60 px-3 py-1.5 rounded-full border border-amber-500/40">
-                  <span class="text-xs text-amber-300 font-bold">â‚¹</span>
+                  <span class="text-xs text-amber-300 font-bold">₹</span>
                   <span class="text-sm font-mono font-bold text-green-400">\${state.user.balance.toFixed(2)}</span>
                 </div>
                 <button onclick="switchView('pwchange')" class="px-2.5 py-1 bg-amber-600/30 border border-amber-500/50 rounded-lg text-[10px] font-bold text-amber-300">Password</button>
@@ -1514,10 +1514,10 @@ app.get('/', (req, res) => {
             </div>
             <div class="flex-1 p-4 grid grid-cols-2 gap-4 overflow-y-auto">
               \${[
-                { id: 'careerboot', name: 'CareerBoot', icon: 'ðŸŽ“', desc: 'Wheel & MCQ Rounds' },
-                { id: 'aviator', name: 'Aviator', icon: 'ðŸš€', desc: 'Realtime Multiplier' },
-                { id: 'guesscorrect', name: 'Guess Correct', icon: 'ðŸŽ²', desc: 'Big vs Small Dice' },
-                { id: 'prediction', name: 'Prediction', icon: 'ðŸ“ˆ', desc: 'Live Market Line' }
+                { id: 'careerboot', name: 'CareerBoot', icon: '🎓', desc: 'Wheel & MCQ Rounds' },
+                { id: 'aviator', name: 'Aviator', icon: '🚀', desc: 'Realtime Multiplier' },
+                { id: 'guesscorrect', name: 'Guess Correct', icon: '🎲', desc: 'Big vs Small Dice' },
+                { id: 'prediction', name: 'Prediction', icon: '📈', desc: 'Live Market Line' }
               ].map(g => \`
                 <button onclick="switchView('\${g.id}')" class="tomato-card p-4 rounded-3xl flex flex-col items-center justify-center text-center space-y-2 active:scale-95 transition-all">
                   <span class="text-4xl">\${g.icon}</span>
@@ -1540,7 +1540,7 @@ app.get('/', (req, res) => {
               <div class="h-14 px-3 bg-red-950 border-b border-amber-500/40 flex items-center justify-between">
                 <button onclick="switchView('lobby')" class="px-3 py-1 bg-red-900 border border-amber-500/40 rounded-xl text-xs font-bold text-white">Lobby</button>
                 <span class="font-black gold-text">CAREERBOOT WHEEL</span>
-                <span class="font-mono text-sm text-green-400 font-bold">â‚¹\${state.user.balance.toFixed(2)}</span>
+                <span class="font-mono text-sm text-green-400 font-bold">₹\${state.user.balance.toFixed(2)}</span>
               </div>
               <div class="flex-1 flex flex-col items-center justify-center p-4 space-y-4">
                 <div class="relative w-72 h-72 flex items-center justify-center">
@@ -1548,7 +1548,7 @@ app.get('/', (req, res) => {
                 </div>
                 \${renderBetControllerUI()}
                 <button onclick="spinCareerBootWheel()" \${cb.spinning ? 'disabled' : ''} class="w-full max-w-xs h-14 rounded-2xl font-black text-xl tracking-wider gold-gradient text-black shadow-xl active:scale-95 transition-all">
-                  \${cb.spinning ? 'SPINNING...' : 'SPIN THE WHEEL ðŸŽ¡'}
+                  \${cb.spinning ? 'SPINNING...' : 'SPIN THE WHEEL 🎡'}
                 </button>
               </div>
             </div>
@@ -1560,12 +1560,12 @@ app.get('/', (req, res) => {
               <div class="h-14 px-3 bg-red-950 border-b border-amber-500/40 flex items-center justify-between shrink-0">
                 <button onclick="state.careerboot.stage='WHEEL'; render();" class="px-3 py-1 bg-red-900 border border-amber-500/40 rounded-xl text-xs font-bold text-white">Wheel</button>
                 <span class="font-black gold-text uppercase">\${cb.selectedSlice} MASTER CLASS</span>
-                <span class="font-mono text-sm text-green-400 font-bold">â‚¹\${state.user.balance.toFixed(2)}</span>
+                <span class="font-mono text-sm text-green-400 font-bold">₹\${state.user.balance.toFixed(2)}</span>
               </div>
               <div class="flex-1 p-5 overflow-y-auto space-y-4">
                 <div class="tomato-card p-6 rounded-3xl space-y-3">
                   <div class="flex items-center gap-2">
-                    <span class="text-2xl">ðŸ“–</span>
+                    <span class="text-2xl">📖</span>
                     <h2 class="text-xl font-black text-amber-300 uppercase">\${cb.selectedSlice} Deep Detailed Chapter</h2>
                   </div>
                   \${sliceData.lesson}
@@ -1573,49 +1573,53 @@ app.get('/', (req, res) => {
               </div>
               <div class="p-4 bg-red-950 border-t border-amber-500/40 shrink-0 flex justify-center">
                 <button onclick="startCareerBootMCQs()" class="w-full max-w-xs h-14 rounded-2xl font-black text-lg gold-gradient text-black shadow-xl active:scale-95">
-                  START MCQ QUIZ ðŸš€
+                  START MCQ QUIZ 🚀
                 </button>
               </div>
             </div>
           \`;
         } else if (cb.stage === 'MCQ') {
           const qIdx = (cb.round - 1) * 5 + cb.questionIndex;
-          const qObj = cb.activeQuestions[qIdx];
-          const roundMultText = cb.round === 1 ? '+1.40x' : (cb.round === 2 ? '+1.60x' : '+2.00x');
+          const currentQ = cb.activeQuestions[qIdx];
 
           html = \`
             <div class="h-full w-full flex flex-col bg-[#120303]">
-              <div class="h-14 px-3 bg-red-950 border-b border-amber-500/40 flex items-center justify-between shrink-0">
-                <span class="text-xs font-bold text-amber-300">ROUND \${cb.round}/3</span>
-                <span class="font-black gold-text uppercase">\${cb.selectedSlice}</span>
-                <span class="text-xs font-mono font-bold text-green-400">MULT: \${roundMultText}</span>
-              </div>
-              <div class="p-3 bg-black/40 border-b border-amber-500/20 flex justify-between items-center shrink-0">
-                <span class="text-xs text-amber-200/70 font-semibold">Question \${cb.questionIndex + 1} of 5 (Total 15)</span>
-                <span class="text-xs font-mono text-amber-300 font-bold">ACCUMULATED: \${cb.accumulatedMultiplier.toFixed(2)}x</span>
-              </div>
-              <div class="flex-1 p-5 flex flex-col justify-between overflow-y-auto">
-                <div class="tomato-card p-6 rounded-3xl space-y-4">
-                  <h3 class="text-base font-bold text-amber-300 leading-snug">\${qObj.q}</h3>
+              <div class="h-14 px-3 bg-red-950 border-b border-amber-500/40 flex items-center justify-between">
+                <div class="flex flex-col">
+                  <span class="text-[10px] text-amber-300 font-bold">ROUND \${cb.round} / 3</span>
+                  <span class="text-xs font-black text-white">Q\${cb.questionIndex + 1} of 5</span>
                 </div>
-                <div class="space-y-3 my-4">
-                  \${qObj.opts.map((opt, idx) => {
-                    let btnStyle = 'bg-black/70 border-amber-500/40 text-white';
+                <span class="font-black gold-text uppercase">\${cb.selectedSlice}</span>
+                <span class="font-mono text-sm text-green-400 font-bold">₹\${state.user.balance.toFixed(2)}</span>
+              </div>
+              
+              <div class="flex-1 p-5 flex flex-col justify-between overflow-y-auto">
+                <div class="space-y-4">
+                  <div class="flex justify-between items-center text-xs font-bold text-amber-300">
+                    <span>ACCUMULATED MULTIPLIER:</span>
+                    <span class="font-mono text-base text-yellow-400">\${cb.accumulatedMultiplier.toFixed(2)}x</span>
+                  </div>
 
-                    if (cb.isAnswered) {
-                      if (idx === qObj.a) {
-                        btnStyle = 'bg-emerald-600 border-emerald-400 text-white font-bold ring-2 ring-emerald-300';
-                      } else if (idx === cb.selectedAnswer && cb.selectedAnswer !== qObj.a) {
-                        btnStyle = 'bg-red-600 border-red-400 text-white font-bold';
+                  <div class="tomato-card p-5 rounded-2xl space-y-2">
+                    <span class="text-xs font-bold text-amber-300/70">QUESTION \${qIdx + 1}</span>
+                    <p class="text-base font-black text-white leading-snug">\${currentQ ? currentQ.q : ''}</p>
+                  </div>
+
+                  <div class="space-y-2.5">
+                    \${currentQ ? currentQ.opts.map((opt, oIdx) => {
+                      let btnStyle = "bg-black/60 border-amber-500/40 text-amber-100";
+                      if (cb.isAnswered) {
+                        if (oIdx === currentQ.a) btnStyle = "bg-emerald-600 border-green-300 text-white font-bold";
+                        else if (oIdx === cb.selectedAnswer) btnStyle = "bg-red-700 border-red-400 text-white font-bold";
                       }
-                    }
-
-                    return \`
-                      <button onclick="handleCareerBootAnswer(\${idx})" \${cb.isAnswered ? 'disabled' : ''} class="w-full p-4 rounded-2xl border text-left text-sm font-semibold transition-all shadow-md \${btnStyle}">
-                        <span class="text-amber-300 font-black mr-2">\${['A','B','C','D'][idx]}.</span> \${opt}
-                      </button>
-                    \`;
-                  }).join('')}
+                      return \`
+                        <button onclick="handleCareerBootAnswer(\${oIdx})" \${cb.isAnswered ? 'disabled' : ''} class="w-full p-4 rounded-xl border text-left text-sm transition-all shadow-md active:scale-95 flex items-center gap-3 \${btnStyle}">
+                          <span class="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center text-xs font-bold shrink-0">\${String.fromCharCode(65 + oIdx)}</span>
+                          <span>\${opt}</span>
+                        </button>
+                      \`;
+                    }).join('') : ''}
+                  </div>
                 </div>
               </div>
             </div>
@@ -1623,91 +1627,75 @@ app.get('/', (req, res) => {
         }
       }
 
-      else if (state.currentView === 'pwchange') {
-        html = \`
-          <div class="h-full w-full flex flex-col bg-[#120303] p-6 justify-center">
-            <div class="tomato-card p-6 rounded-3xl space-y-4">
-              <h2 class="text-xl font-black text-amber-300 text-center">Change Password</h2>
-              <input id="opw" type="password" placeholder="Old Password" class="w-full p-3 bg-black/60 border border-amber-500/40 rounded-xl text-sm outline-none text-white">
-              <input id="npw" type="password" placeholder="New Password" class="w-full p-3 bg-black/60 border border-amber-500/40 rounded-xl text-sm outline-none text-white">
-              <div class="flex gap-2">
-                <button onclick="switchView('lobby')" class="w-1/2 bg-gray-800 text-gray-300 font-bold py-3 rounded-xl text-sm">Cancel</button>
-                <button onclick="changePassword()" class="w-1/2 gold-gradient text-black font-black py-3 rounded-xl text-sm">Update</button>
-              </div>
-            </div>
-          </div>
-        \`;
-      }
-
       else if (state.currentView === 'aviator') {
         html = \`
-          <div class="h-full w-full flex flex-col bg-[#0b0e14]">
-            <div class="h-14 px-3 bg-[#141822] border-b border-gray-800 flex items-center justify-between shrink-0">
-              <button onclick="switchView('lobby')" class="px-3 py-1 bg-red-900/80 border border-red-500/50 rounded-xl text-xs font-bold text-white">Lobby</button>
-              <span class="font-black text-amber-400 text-sm tracking-wider">AVIATOR 24x7</span>
-              <span class="font-mono text-sm text-green-400 font-bold">â‚¹\${state.user.balance.toFixed(2)}</span>
+          <div class="h-full w-full flex flex-col bg-[#120303]">
+            <div class="h-14 px-3 bg-red-950 border-b border-amber-500/40 flex items-center justify-between">
+              <button onclick="switchView('lobby')" class="px-3 py-1 bg-red-900 border border-amber-500/40 rounded-xl text-xs font-bold text-white">Lobby</button>
+              <span class="font-black gold-text">AVIATOR 24x7</span>
+              <span class="font-mono text-sm text-green-400 font-bold">₹\${state.user.balance.toFixed(2)}</span>
             </div>
-            <div class="h-10 px-2 bg-black/60 border-b border-gray-800/80 flex items-center gap-1.5 overflow-x-auto shrink-0 no-scrollbar">
-              \${state.aviator.history.slice(0, 20).map(h => \`<span class="px-2.5 py-0.5 text-[11px] font-mono font-bold rounded-full bg-gray-800 text-purple-300 border border-purple-500/30 shrink-0">\${h}x</span>\`).join('')}
-            </div>
-            <div class="flex-1 relative bg-gradient-to-b from-[#0b0e14] to-[#161c27] flex items-center justify-center overflow-hidden">
-              <canvas id="aviator-canvas" class="absolute inset-0 w-full h-full"></canvas>
-              <div class="relative z-10 flex flex-col items-center text-center space-y-2 pointer-events-none">
-                <div id="aviator-x" class="text-5xl font-black font-mono gold-text">\${state.aviator.currentX.toFixed(2)}x</div>
-                <div id="aviator-status" class="text-xs font-bold px-3 py-1 rounded-full bg-amber-900/80 text-amber-300 border border-amber-500">CONNECTING...</div>
+            
+            <div class="flex-1 p-3 flex flex-col justify-between space-y-3">
+              <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1">
+                \${state.aviator.history.map(x => \`
+                  <span class="px-2 py-0.5 rounded-md text-[10px] font-mono font-bold shrink-0 \${x >= 2 ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'bg-slate-800 text-slate-300'}">\${x.toFixed(2)}x</span>
+                \`).join('')}
               </div>
-            </div>
-            <div class="p-4 bg-[#141822] border-t border-gray-800 shrink-0 space-y-3 flex flex-col items-center">
-              \${renderBetControllerUI()}
-              <button id="aviator-btn" onclick="handleAviatorAction()" class="w-full max-w-xs h-14 rounded-2xl font-black text-xl tracking-wider bg-red-600 text-white shadow-lg">
-                BET â‚¹\${state.userBet}
-              </button>
+
+              <div class="relative flex-1 bg-slate-950 rounded-2xl border border-slate-800 overflow-hidden flex flex-col items-center justify-center">
+                <canvas id="aviator-canvas" class="absolute inset-0 w-full h-full"></canvas>
+                <div class="z-10 text-center space-y-1">
+                  <div id="aviator-x" class="text-5xl font-black font-mono text-amber-400">1.00x</div>
+                  <div id="aviator-status" class="text-xs font-bold px-3 py-1 rounded-full bg-amber-900/80 text-amber-300 border border-amber-500">WAITING</div>
+                </div>
+              </div>
+
+              <div class="flex flex-col items-center gap-3">
+                \${renderBetControllerUI()}
+                <button id="aviator-btn" onclick="handleAviatorAction()" class="w-full h-14 rounded-2xl font-black text-xl tracking-wider shadow-lg gold-gradient text-black">
+                  BET ₹\${state.userBet}
+                </button>
+              </div>
             </div>
           </div>
         \`;
       }
 
       else if (state.currentView === 'guesscorrect') {
-        const diceDots = {
-          1: ['bg-red-500 flex items-center justify-center col-span-3 row-span-3 justify-self-center self-center'],
-          2: ['col-start-1 row-start-1 bg-white', 'col-start-3 row-start-3 bg-white'],
-          3: ['col-start-1 row-start-1 bg-white', 'col-start-2 row-start-2 bg-white', 'col-start-3 row-start-3 bg-white'],
-          4: ['col-start-1 row-start-1 bg-white', 'col-start-3 row-start-1 bg-white', 'col-start-1 row-start-3 bg-white', 'col-start-3 row-start-3 bg-white'],
-          5: ['col-start-1 row-start-1 bg-white', 'col-start-3 row-start-1 bg-white', 'col-start-2 row-start-2 bg-white', 'col-start-1 row-start-3 bg-white', 'col-start-3 row-start-3 bg-white'],
-          6: ['col-start-1 row-start-1 bg-white', 'col-start-3 row-start-1 bg-white', 'col-start-1 row-start-2 bg-white', 'col-start-3 row-start-2 bg-white', 'col-start-1 row-start-3 bg-white', 'col-start-3 row-start-3 bg-white']
-        };
-
-        const renderDice = (val) => \`
-          <div class="w-20 h-20 bg-gradient-to-br from-red-600 to-red-950 border-2 border-amber-400 rounded-2xl shadow-xl grid grid-cols-3 grid-rows-3 p-3 gap-1">
-            \${(diceDots[val] || []).map(cls => \`<div class="w-3.5 h-3.5 rounded-full shadow-inner \${cls}"></div>\`).join('')}
-          </div>
-        \`;
-
         html = \`
           <div class="h-full w-full flex flex-col bg-[#120303]">
             <div class="h-14 px-3 bg-red-950 border-b border-amber-500/40 flex items-center justify-between">
               <button onclick="switchView('lobby')" class="px-3 py-1 bg-red-900 border border-amber-500/40 rounded-xl text-xs font-bold text-white">Lobby</button>
-              <span class="font-black gold-text">GUESS CORRECT</span>
-              <span class="font-mono text-sm text-green-400 font-bold">â‚¹\${state.user.balance.toFixed(2)}</span>
+              <span class="font-black gold-text">GUESS CORRECT 🎲</span>
+              <span class="font-mono text-sm text-green-400 font-bold">₹\${state.user.balance.toFixed(2)}</span>
             </div>
-            <div class="flex-1 flex flex-col items-center justify-center p-6 space-y-6">
-              <div class="tomato-card p-6 rounded-3xl w-full max-w-xs text-center space-y-3">
-                <div class="flex justify-center gap-6">
-                  \${renderDice(state.diceResults[0])}
-                  \${renderDice(state.diceResults[1])}
-                </div>
-                <p class="text-xs text-amber-200/70 font-bold">Predict Dice Total Sum</p>
+
+            <div class="flex-1 p-5 flex flex-col items-center justify-between">
+              <div class="text-center space-y-1">
+                <h2 class="text-lg font-black text-amber-300">BIG OR SMALL DICE</h2>
+                <p class="text-xs text-amber-200/60">Small (2-6) | Big (7-12)</p>
               </div>
-              \${renderBetControllerUI()}
-              <div class="grid grid-cols-2 gap-4 w-full max-w-xs">
-                <button onclick="playDiceGame('small')" class="tomato-card h-16 rounded-2xl flex flex-col items-center justify-center space-y-0.5 active:scale-95">
-                  <span class="font-black text-lg text-amber-300">SMALL</span>
-                  <span class="text-[10px] text-amber-100/60">Sum 2 to 6</span>
-                </button>
-                <button onclick="playDiceGame('big')" class="tomato-card h-16 rounded-2xl flex flex-col items-center justify-center space-y-0.5 active:scale-95">
-                  <span class="font-black text-lg text-amber-300">BIG</span>
-                  <span class="text-[10px] text-amber-100/60">Sum 7 to 12</span>
-                </button>
+
+              <div class="flex items-center justify-center gap-6 my-6">
+                <div class="w-20 h-20 bg-gradient-to-br from-red-600 to-red-950 rounded-2xl border-2 border-amber-400 flex items-center justify-center text-4xl font-black text-amber-300 shadow-2xl">
+                  \${state.diceResults[0]}
+                </div>
+                <div class="w-20 h-20 bg-gradient-to-br from-red-600 to-red-950 rounded-2xl border-2 border-amber-400 flex items-center justify-center text-4xl font-black text-amber-300 shadow-2xl">
+                  \${state.diceResults[1]}
+                </div>
+              </div>
+
+              <div class="w-full space-y-4 flex flex-col items-center">
+                \${renderBetControllerUI()}
+                <div class="grid grid-cols-2 gap-4 w-full">
+                  <button onclick="playDiceGame('small')" \${state.diceRolling ? 'disabled' : ''} class="h-16 rounded-2xl bg-gradient-to-r from-blue-900 to-indigo-950 border-2 border-blue-400 text-white font-black text-lg active:scale-95 shadow-xl">
+                    SMALL (2-6)
+                  </button>
+                  <button onclick="playDiceGame('big')" \${state.diceRolling ? 'disabled' : ''} class="h-16 rounded-2xl bg-gradient-to-r from-amber-700 to-yellow-900 border-2 border-amber-400 text-white font-black text-lg active:scale-95 shadow-xl">
+                    BIG (7-12)
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -1716,37 +1704,62 @@ app.get('/', (req, res) => {
 
       else if (state.currentView === 'prediction') {
         html = \`
-          <div class="h-full w-full flex flex-col bg-[#0b0404]">
+          <div class="h-full w-full flex flex-col bg-[#120303]">
             <div class="h-14 px-3 bg-red-950 border-b border-amber-500/40 flex items-center justify-between">
-              <button onclick="switchView('lobby')" class="px-3 py-1 bg-red-900/80 border border-amber-500/40 rounded-xl text-xs font-bold text-white">Lobby</button>
-              <span class="font-black gold-text tracking-wider">PREDICTION PRO</span>
-              <span class="font-mono text-sm text-green-400 font-bold">â‚¹\${state.user.balance.toFixed(2)}</span>
+              <button onclick="switchView('lobby')" class="px-3 py-1 bg-red-900 border border-amber-500/40 rounded-xl text-xs font-bold text-white">Lobby</button>
+              <span class="font-black gold-text">PREDICTION GRAPH 📈</span>
+              <span class="font-mono text-sm text-green-400 font-bold">₹\${state.user.balance.toFixed(2)}</span>
             </div>
-            <div class="flex-1 flex flex-col items-center justify-between p-3 space-y-3">
-              <div class="w-full flex-1 bg-gradient-to-b from-[#090d16] to-[#04060a] border-2 border-emerald-500/30 rounded-3xl relative overflow-hidden flex flex-col p-2 min-h-[280px] shadow-[0_0_20px_rgba(16,185,129,0.15)]">
-                <canvas id="market-canvas" class="absolute inset-0 w-full h-full"></canvas>
-                <div class="relative z-10 flex justify-between items-center p-2 pointer-events-none">
-                  <div class="flex items-center gap-2 bg-black/80 backdrop-blur-md px-3 py-1.5 rounded-2xl border border-emerald-500/40 shadow-lg">
-                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></span>
-                    <span class="text-xs font-bold text-emerald-400 uppercase tracking-widest">LIVE</span>
-                    <span class="text-sm font-mono font-black text-white ml-1">â‚¹\${state.marketHistory[state.marketHistory.length - 1]}</span>
-                  </div>
-                  \${state.predictionTimer > 0 ? \`
-                    <div class="text-xs font-mono font-black text-amber-300 bg-amber-950/90 backdrop-blur-md px-3 py-1.5 rounded-2xl border border-amber-500/60 animate-pulse shadow-lg">
-                      LOCKING IN \${state.predictionTimer}s
+
+            <div class="flex-1 p-3 flex flex-col justify-between space-y-3">
+              <div class="flex justify-between items-center text-xs font-bold px-2">
+                <span class="text-amber-300">LIVE MARKET RATE</span>
+                <span class="font-mono text-green-400">₹\${state.marketHistory[state.marketHistory.length - 1]}</span>
+              </div>
+
+              <div class="relative flex-1 bg-slate-950 rounded-2xl border border-slate-800 overflow-hidden">
+                <canvas id="market-canvas" class="w-full h-full"></canvas>
+                \${state.predictionTimer > 0 ? \`
+                  <div class="absolute inset-0 bg-black/40 backdrop-blur-[1px] flex items-center justify-center">
+                    <div class="text-center">
+                      <div class="text-4xl font-black font-mono text-amber-300 animate-bounce">\${state.predictionTimer}s</div>
+                      <div class="text-xs text-amber-200 font-bold">LOCKING RESULT...</div>
                     </div>
-                  \` : ''}
+                  </div>
+                \` : ''}
+              </div>
+
+              <div class="flex flex-col items-center gap-3">
+                \${renderBetControllerUI()}
+                <div class="grid grid-cols-2 gap-3 w-full">
+                  <button onclick="playPrediction('up')" \${state.predictionTimer > 0 ? 'disabled' : ''} class="h-14 rounded-2xl bg-emerald-600 border-2 border-green-300 text-black font-black text-lg active:scale-95 shadow-xl">
+                    UP 📈
+                  </button>
+                  <button onclick="playPrediction('down')" \${state.predictionTimer > 0 ? 'disabled' : ''} class="h-14 rounded-2xl bg-red-600 border-2 border-red-300 text-white font-black text-lg active:scale-95 shadow-xl">
+                    DOWN 📉
+                  </button>
                 </div>
               </div>
-              \${renderBetControllerUI()}
-              <div class="grid grid-cols-2 gap-4 w-full max-w-xs shrink-0">
-                <button onclick="playPrediction('up')" class="bg-gradient-to-b from-emerald-500 to-emerald-700 border-2 border-emerald-400 h-14 rounded-2xl font-black text-lg active:scale-95 text-white shadow-[0_0_15px_rgba(16,185,129,0.4)] flex items-center justify-center gap-2">
-                  <span>UP</span>
-                  <span class="text-xl">ðŸ“ˆ</span>
-                </button>
-                <button onclick="playPrediction('down')" class="bg-gradient-to-b from-red-600 to-red-800 border-2 border-red-400 h-14 rounded-2xl font-black text-lg active:scale-95 text-white shadow-[0_0_15px_rgba(239,68,68,0.4)] flex items-center justify-center gap-2">
-                  <span>DOWN</span>
-                  <span class="text-xl">ðŸ“‰</span>
+            </div>
+          </div>
+        \`;
+      }
+
+      else if (state.currentView === 'pwchange') {
+        html = \`
+          <div class="h-full w-full flex flex-col bg-[#120303]">
+            <div class="h-14 px-3 bg-red-950 border-b border-amber-500/40 flex items-center justify-between">
+              <button onclick="switchView('lobby')" class="px-3 py-1 bg-red-900 border border-amber-500/40 rounded-xl text-xs font-bold text-white">Back</button>
+              <span class="font-black gold-text">CHANGE PASSWORD</span>
+              <div></div>
+            </div>
+
+            <div class="flex-1 p-6 flex items-center justify-center">
+              <div class="tomato-card p-6 rounded-3xl w-full space-y-4">
+                <input id="opw" type="password" placeholder="Old Password" class="w-full p-3 rounded-xl bg-black/60 border border-amber-500/40 text-white placeholder-amber-200/40 text-sm outline-none">
+                <input id="npw" type="password" placeholder="New Password" class="w-full p-3 rounded-xl bg-black/60 border border-amber-500/40 text-white placeholder-amber-200/40 text-sm outline-none">
+                <button onclick="changePassword()" class="w-full gold-gradient text-black font-black py-3 rounded-xl shadow-xl">
+                  UPDATE PASSWORD
                 </button>
               </div>
             </div>
@@ -1756,53 +1769,57 @@ app.get('/', (req, res) => {
 
       else if (state.currentView === 'admin') {
         html = \`
-          <div class="h-full w-full flex flex-col bg-[#0b0202] p-4 overflow-hidden">
-            <div class="flex justify-between items-center border-b border-amber-500/40 pb-3 shrink-0">
-              <h1 class="text-lg font-black gold-text">Admin Panel (Boss)</h1>
-              <div class="flex gap-2">
-                <button onclick="switchView('pwchange')" class="bg-amber-800 border border-amber-500 px-2 py-1 rounded-xl text-xs font-bold text-white">Password</button>
-                <button onclick="switchView('login')" class="bg-red-900 border border-red-500 px-2 py-1 rounded-xl text-xs font-bold text-white">Logout</button>
+          <div class="h-full w-full flex flex-col bg-[#120303]">
+            <div class="h-14 px-3 bg-red-950 border-b border-amber-500/40 flex items-center justify-between">
+              <span class="font-black gold-text">ADMIN PANEL</span>
+              <button onclick="switchView('login')" class="px-2.5 py-1 bg-red-900/50 border border-red-500/50 rounded-lg text-[10px] font-bold text-red-300">Logout</button>
+            </div>
+
+            <div class="flex-1 p-4 space-y-4 overflow-y-auto">
+              <div class="tomato-card p-4 rounded-2xl space-y-3">
+                <h3 class="text-sm font-bold text-amber-300">CREATE PLAYER ACCOUNT</h3>
+                <input id="nu" type="text" placeholder="New Username" class="w-full p-2.5 rounded-xl bg-black/60 border border-amber-500/40 text-white text-xs outline-none">
+                <input id="np" type="password" placeholder="New Password" class="w-full p-2.5 rounded-xl bg-black/60 border border-amber-500/40 text-white text-xs outline-none">
+                <button onclick="
+                  const u=document.getElementById('nu').value;
+                  const p=document.getElementById('np').value;
+                  fetch('/api/admin/create-user', {
+                    method:'POST', headers:{'Content-Type':'application/json'},
+                    body: JSON.stringify({username:u, password:p})
+                  }).then(r=>r.json()).then(d=>{
+                    if(d.error) showPopup(d.error, 'OK');
+                    else { showPopup('User Created!', 'OK'); fetchAdminUsers(); }
+                  });
+                " class="w-full gold-gradient text-black font-bold py-2.5 rounded-xl text-xs">CREATE PLAYER</button>
               </div>
-            </div>
 
-            <div class="flex gap-2 my-3 shrink-0">
-              <button onclick="state.adminSubTab='users'; render();" class="w-1/2 py-2 rounded-xl font-bold text-xs \${state.adminSubTab==='users' ? 'gold-gradient text-black' : 'bg-gray-800 text-gray-400'}">Users Management</button>
-              <button onclick="state.adminSubTab='create'; render();" class="w-1/2 py-2 rounded-xl font-bold text-xs \${state.adminSubTab==='create' ? 'gold-gradient text-black' : 'bg-gray-800 text-gray-400'}">Create User</button>
-            </div>
-
-            <div class="flex-1 overflow-y-auto space-y-4">
-              \${state.adminSubTab === 'create' ? \`
-                <div class="tomato-card p-4 rounded-2xl space-y-3">
-                  <h3 class="font-bold text-sm text-amber-300">Create Player Account</h3>
-                  <input id="nu" placeholder="New Username" class="w-full p-3 bg-black/60 border border-amber-500/40 rounded-xl text-sm outline-none text-white">
-                  <input id="np" placeholder="New Password" class="w-full p-3 bg-black/60 border border-amber-500/40 rounded-xl text-sm outline-none text-white">
-                  <button onclick="createPlayer()" class="w-full gold-gradient text-black font-black py-3 rounded-xl text-sm">Create Account</button>
-                </div>
-              \` : \`
-                <div class="tomato-card p-4 rounded-2xl space-y-3">
-                  <h3 class="font-bold text-sm text-amber-300">Modify User Balance</h3>
-                  <input id="bu" placeholder="Player Username" class="w-full p-3 bg-black/60 border border-amber-500/40 rounded-xl text-sm outline-none text-white">
-                  <input id="ba" type="number" placeholder="Amount (+1000 or -500)" class="w-full p-3 bg-black/60 border border-amber-500/40 rounded-xl text-sm outline-none text-white">
-                  <button onclick="modifyBalance()" class="w-full bg-emerald-600 text-white font-black py-3 rounded-xl text-sm">Update Balance</button>
-                </div>
-
-                <div class="space-y-2">
-                  <h3 class="font-bold text-xs text-amber-300/80">ALL PLAYERS STATISTICS</h3>
+              <div class="tomato-card p-4 rounded-2xl space-y-3">
+                <h3 class="text-sm font-bold text-amber-300">MANAGED PLAYERS</h3>
+                <div class="space-y-2 max-h-60 overflow-y-auto">
                   \${state.adminUsers.map(u => \`
-                    <div class="bg-black/60 p-3 rounded-xl border border-amber-500/30 text-xs space-y-1">
-                      <div class="flex justify-between font-bold text-amber-300">
-                        <span>ðŸ‘¤ \${u.username}</span>
-                        <span class="text-green-400 font-mono">â‚¹\${u.balance.toFixed(2)}</span>
+                    <div class="bg-black/60 p-2.5 rounded-xl border border-amber-500/20 flex items-center justify-between">
+                      <div>
+                        <div class="text-xs font-bold text-white">\${u.username}</div>
+                        <div class="text-[10px] text-green-400 font-mono">₹\${u.balance.toFixed(2)}</div>
                       </div>
-                      <div class="grid grid-cols-3 gap-1 text-[10px] text-gray-400 font-mono mt-1">
-                        <div>Won: <span class="text-green-400">â‚¹\${u.totalWon}</span></div>
-                        <div>Lost: <span class="text-red-400">â‚¹\${u.totalLost}</span></div>
-                        <div>Placed: <span class="text-amber-200">â‚¹\${u.totalBetPlaced}</span></div>
+                      <div class="flex gap-1">
+                        <button onclick="
+                          fetch('/api/admin/update-balance', {
+                            method:'POST', headers:{'Content-Type':'application/json'},
+                            body: JSON.stringify({username:'\${u.username}', amount:500})
+                          }).then(()=>fetchAdminUsers());
+                        " class="px-2 py-1 bg-green-800 text-white text-[10px] font-bold rounded-lg">+500</button>
+                        <button onclick="
+                          fetch('/api/admin/update-balance', {
+                            method:'POST', headers:{'Content-Type':'application/json'},
+                            body: JSON.stringify({username:'\${u.username}', amount:-500})
+                          }).then(()=>fetchAdminUsers());
+                        " class="px-2 py-1 bg-red-800 text-white text-[10px] font-bold rounded-lg">-500</button>
                       </div>
                     </div>
                   \`).join('')}
                 </div>
-              \`}
+              </div>
             </div>
           </div>
         \`;
@@ -1810,31 +1827,9 @@ app.get('/', (req, res) => {
 
       app.innerHTML = html + popupHtml;
 
-      if(state.currentView === 'aviator') renderAviatorOverlay();
-      if(state.currentView === 'prediction') renderPredictionGraph();
-      if(state.currentView === 'careerboot' && state.careerboot.stage === 'WHEEL') renderCareerBootWheelCanvas();
-    }
-
-    async function createPlayer() {
-      const username = document.getElementById('nu').value;
-      const password = document.getElementById('np').value;
-      const res = await fetch('/api/admin/create-user', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
-      });
-      if (res.ok) { fetchAdminUsers(); showPopup('User Created Successfully', 'OK'); }
-      else showPopup('Error Creating User', 'try again');
-    }
-
-    async function modifyBalance() {
-      const username = document.getElementById('bu').value;
-      const amount = parseFloat(document.getElementById('ba').value);
-      const res = await fetch('/api/admin/update-balance', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, amount })
-      });
-      if (res.ok) { fetchAdminUsers(); showPopup('Balance Updated!', 'OK'); }
-      else showPopup('User Not Found', 'try again');
+      if (state.currentView === 'aviator') renderAviatorOverlay();
+      if (state.currentView === 'prediction') renderPredictionGraph();
+      if (state.currentView === 'careerboot' && state.careerboot.stage === 'WHEEL') renderCareerBootWheelCanvas();
     }
 
     render();
@@ -1845,32 +1840,19 @@ app.get('/', (req, res) => {
 });
 
 // ==========================================
-// SERVER INITIALIZATION ENGINE
+// DB CONNECTION & SERVER START
 // ==========================================
-const PORT = process.env.PORT || 10000;
-const MONGO_URI = process.env.MONGODB_URI;
+const PORT = process.env.PORT || 3000;
+const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/skilled_old_hand';
 
-async function startServer() {
-  if (!MONGO_URI) {
-    console.error("CRITICAL ERROR: MONGODB_URI environment variable missing!");
-    process.exit(1);
-  }
-  try {
-    await mongoose.connect(MONGO_URI, { serverSelectionTimeoutMS: 5000 });
-    console.log("MongoDB Connected Successfully");
-    
-    const boss = await User.findOne({ username: 'Boss' });
-    if (!boss) {
-      const hashedPassword = await bcrypt.hash('BigBoss', 10);
-      await User.create({ username: 'Boss', password: hashedPassword, role: 'admin', balance: 999999 });
-      console.log("Default Admin Account Created: Boss / BigBoss");
-    }
-
-    server.listen(PORT, () => console.log(`Casino Server active on port ${PORT}`));
-    startAviatorLoop();
-  } catch (err) {
-    console.error("Database connection failure:", err.message);
-  }
-}
-
-startServer();
+mongoose.connect(MONGO_URI)
+  .then(() => {
+    console.log("Connected to MongoDB successfully.");
+    server.listen(PORT, () => {
+      console.log(`Server listening on port ${PORT}`);
+      startAviatorLoop();
+    });
+  })
+  .catch(err => {
+    console.error("MongoDB connection error:", err.message);
+  });
