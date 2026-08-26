@@ -173,6 +173,56 @@ app.post('/api/change-password', async (req, res) => {
   res.json({ success: true, message: 'Password Updated Successfully!' });
 });
 
+// AVIATOR BET DEDUCTION & WIN/LOSS APIS
+app.post('/api/aviator/bet', async (req, res) => {
+  const { username, betAmount } = req.body;
+  const numBet = parseFloat(betAmount);
+  if (isNaN(numBet) || numBet <= 0) return res.status(400).json({ error: 'Invalid Bet Amount' });
+
+  const user = await User.findOneAndUpdate(
+    { username, balance: { $gte: numBet } },
+    { $inc: { balance: -numBet, totalBetPlaced: numBet } },
+    { new: true }
+  );
+
+  if (!user) return res.status(400).json({ error: 'Insufficient Balance' });
+  res.json({ success: true, newBalance: user.balance });
+});
+
+app.post('/api/aviator/cashout', async (req, res) => {
+  const { username, betAmount, multiplier } = req.body;
+  const numBet = parseFloat(betAmount);
+  const numMult = parseFloat(multiplier);
+  if (isNaN(numBet) || isNaN(numMult) || numBet <= 0 || numMult < 1) {
+    return res.status(400).json({ error: 'Invalid Parameters' });
+  }
+
+  const winAmount = +(numBet * numMult).toFixed(2);
+  const user = await User.findOneAndUpdate(
+    { username },
+    { $inc: { balance: winAmount, totalWon: winAmount } },
+    { new: true }
+  );
+
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  res.json({ success: true, newBalance: user.balance, winAmount });
+});
+
+app.post('/api/aviator/loss', async (req, res) => {
+  const { username, betAmount } = req.body;
+  const numBet = parseFloat(betAmount);
+  if (isNaN(numBet) || numBet <= 0) return res.status(400).json({ error: 'Invalid Details' });
+
+  const user = await User.findOneAndUpdate(
+    { username },
+    { $inc: { totalLost: numBet } },
+    { new: true }
+  );
+
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  res.json({ success: true, newBalance: user.balance });
+});
+
 // ==========================================
 // DEPOSIT & WITHDRAWAL APIS
 // ==========================================
@@ -618,13 +668,27 @@ app.get('/', (req, res) => {
     }
 
     const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host);
-    ws.onmessage = (e) => {
+    ws.onmessage = async (e) => {
       const data = JSON.parse(e.data);
       if (data.type === 'AVIATOR_STATE') {
         state.aviator = data;
         if (data.status === 'WAITING') {
-          if (state.nextRoundBet) {
-            state.hasBetAviator = true;
+          if (state.nextRoundBet && state.user) {
+            try {
+              const res = await fetch('/api/aviator/bet', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: state.user.username, betAmount: state.userBet })
+              });
+              const bData = await res.json();
+              if (res.ok) {
+                state.user.balance = bData.newBalance;
+                state.hasBetAviator = true;
+              } else {
+                showPopup(bData.error || 'Bet Failed', 'OK');
+              }
+            } catch(err) {
+              console.error(err);
+            }
             state.nextRoundBet = false;
           }
           state.cashedOut = false;
@@ -632,6 +696,18 @@ app.get('/', (req, res) => {
         if (data.status === 'FLYING' && !state.cashedOut) sound.playFly();
         if (data.status === 'CRASHED' && state.hasBetAviator && !state.cashedOut) {
           sound.playLoss();
+          if (state.user) {
+            try {
+              const res = await fetch('/api/aviator/loss', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: state.user.username, betAmount: state.userBet })
+              });
+              const lData = await res.json();
+              if (res.ok) state.user.balance = lData.newBalance;
+            } catch(err) {
+              console.error(err);
+            }
+          }
           state.hasBetAviator = false;
         }
         if (state.currentView === 'aviator') renderAviatorOverlay();
@@ -793,15 +869,41 @@ app.get('/', (req, res) => {
       sound.init();
       if (state.aviator.status === 'WAITING' && !state.hasBetAviator) {
         if(state.user.balance < state.userBet) return showPopup("Insufficient Balance!", "OK");
-        state.hasBetAviator = true;
-        renderAviatorOverlay();
+        try {
+          const res = await fetch('/api/aviator/bet', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: state.user.username, betAmount: state.userBet })
+          });
+          const data = await res.json();
+          if (res.ok) {
+            state.user.balance = data.newBalance;
+            state.hasBetAviator = true;
+            renderAviatorOverlay();
+          } else {
+            showPopup(data.error || 'Bet Failed', 'OK');
+          }
+        } catch(e) {
+          showPopup('Connection Error', 'OK');
+        }
       } else if (state.aviator.status === 'FLYING') {
         if (state.hasBetAviator && !state.cashedOut) {
           state.cashedOut = true;
-          const winAmt = +(state.userBet * state.aviator.currentX).toFixed(2);
-          state.user.balance += (winAmt - state.userBet);
-          sound.playWin();
-          showPopup(\`CASHED OUT AT \${state.aviator.currentX.toFixed(2)}x! WON ₹\${winAmt}\`, 'Paisa hi Paisa');
+          try {
+            const res = await fetch('/api/aviator/cashout', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ username: state.user.username, betAmount: state.userBet, multiplier: state.aviator.currentX })
+            });
+            const data = await res.json();
+            if (res.ok) {
+              state.user.balance = data.newBalance;
+              sound.playWin();
+              showPopup(\`CASHED OUT AT \${state.aviator.currentX.toFixed(2)}x! WON ₹\${data.winAmount}\`, 'Paisa hi Paisa');
+            } else {
+              showPopup(data.error || 'Cashout Failed', 'OK');
+            }
+          } catch(e) {
+            showPopup('Cashout Connection Error', 'OK');
+          }
           state.hasBetAviator = false;
           renderAviatorOverlay();
         } else if (!state.hasBetAviator && !state.nextRoundBet) {
@@ -1885,10 +1987,13 @@ async function startServer() {
       console.log("Default Admin Account Created: Boss / BigBoss");
     }
 
-    server.listen(PORT, () => console.log(`Casino Server active on port ${PORT}`));
-    startAviatorLoop();
+    server.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+      startAviatorLoop();
+    });
   } catch (err) {
-    console.error("Database connection failure:", err.message);
+    console.error("Database connection error:", err.message);
+    process.exit(1);
   }
 }
 
