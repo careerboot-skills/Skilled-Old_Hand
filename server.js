@@ -19,13 +19,25 @@ const userSchema = new mongoose.Schema({
   username: { type: String, required: true, unique: true },
   password: { type: String, required: true },
   role: { type: String, enum: ['admin', 'player'], default: 'player' },
-  balance: { type: Number, default: 1000 },
+  balance: { type: Number, default: 0 }, // Initial balance changed to 0 for real wallet system
   totalWon: { type: Number, default: 0 },
   totalLost: { type: Number, default: 0 },
   totalBetPlaced: { type: Number, default: 0 },
-  seenQuestions: { type: [String], default: [] }
+  seenQuestions: { type: [String], default: [] },
+  createdAt: { type: Date, default: Date.now }
 });
 const User = mongoose.model('User', userSchema);
+
+const transactionSchema = new mongoose.Schema({
+  username: { type: String, required: true },
+  type: { type: String, enum: ['deposit', 'withdrawal'], required: true },
+  amount: { type: Number, required: true },
+  upiId: { type: String, default: '' },
+  txnId: { type: String, default: '' },
+  status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
+  timestamp: { type: Date, default: Date.now }
+});
+const Transaction = mongoose.model('Transaction', transactionSchema);
 
 const historySchema = new mongoose.Schema({
   game: String,
@@ -129,6 +141,18 @@ async function startAviatorLoop() {
 // ==========================================
 // HTTP APIs & AUTH
 // ==========================================
+app.post('/api/signup', async (req, res) => {
+  const { username, password } = req.body;
+  if (!username || !password) return res.status(400).json({ error: 'All fields required' });
+  try {
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const user = await User.create({ username, password: hashedPassword });
+    res.json({ success: true, username: user.username, role: user.role, balance: user.balance });
+  } catch (err) {
+    res.status(400).json({ error: 'Username already exists' });
+  }
+});
+
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
   const user = await User.findOne({ username });
@@ -149,6 +173,38 @@ app.post('/api/change-password', async (req, res) => {
   res.json({ success: true, message: 'Password Updated Successfully!' });
 });
 
+// ==========================================
+// DEPOSIT & WITHDRAWAL APIS
+// ==========================================
+app.post('/api/deposit', async (req, res) => {
+  const { username, amount, txnId } = req.body;
+  const numAmt = parseFloat(amount);
+  if (isNaN(numAmt) || numAmt <= 0 || !txnId) return res.status(400).json({ error: 'Invalid details provided' });
+
+  await Transaction.create({ username, type: 'deposit', amount: numAmt, txnId });
+  res.json({ success: true, message: 'Deposit request submitted successfully! Awaiting Admin approval.' });
+});
+
+app.post('/api/withdraw', async (req, res) => {
+  const { username, amount, upiId } = req.body;
+  const numAmt = parseFloat(amount);
+  if (isNaN(numAmt) || numAmt <= 0 || !upiId) return res.status(400).json({ error: 'Invalid details provided' });
+
+  const user = await User.findOneAndUpdate(
+    { username, balance: { $gte: numAmt } },
+    { $inc: { balance: -numAmt } },
+    { new: true }
+  );
+
+  if (!user) return res.status(400).json({ error: 'Insufficient Balance' });
+
+  await Transaction.create({ username, type: 'withdrawal', amount: numAmt, upiId });
+  res.json({ success: true, newBalance: user.balance, message: 'Withdrawal request submitted!' });
+});
+
+// ==========================================
+// ADMIN CONTROL ENDPOINTS
+// ==========================================
 app.post('/api/admin/create-user', async (req, res) => {
   const { username, password } = req.body;
   try {
@@ -161,8 +217,33 @@ app.post('/api/admin/create-user', async (req, res) => {
 });
 
 app.get('/api/admin/users', async (req, res) => {
-  const users = await User.find({ role: 'player' });
+  const users = await User.find({ role: 'player' }).sort({ createdAt: -1 });
   res.json(users);
+});
+
+app.get('/api/admin/transactions', async (req, res) => {
+  const txns = await Transaction.find().sort({ timestamp: -1 });
+  res.json(txns);
+});
+
+app.post('/api/admin/process-transaction', async (req, res) => {
+  const { txnId, action } = req.body;
+  const txn = await Transaction.findById(txnId);
+  if (!txn || txn.status !== 'pending') return res.status(400).json({ error: 'Transaction unavailable' });
+
+  if (action === 'approve') {
+    txn.status = 'approved';
+    if (txn.type === 'deposit') {
+      await User.findOneAndUpdate({ username: txn.username }, { $inc: { balance: txn.amount } });
+    }
+  } else if (action === 'reject') {
+    txn.status = 'rejected';
+    if (txn.type === 'withdrawal') {
+      await User.findOneAndUpdate({ username: txn.username }, { $inc: { balance: txn.amount } });
+    }
+  }
+  await txn.save();
+  res.json({ success: true });
 });
 
 app.post('/api/admin/update-balance', async (req, res) => {
@@ -214,7 +295,6 @@ app.post('/api/play-instant', async (req, res) => {
     won = choice.won;
     rewardMultiplier = choice.multiplier || 0;
     
-    // Save only unique asked question IDs using $addToSet
     if (choice.askedQuestionIds && Array.isArray(choice.askedQuestionIds)) {
       await User.findOneAndUpdate(
         { username },
@@ -323,7 +403,7 @@ app.get('/', (req, res) => {
         osc.start(); osc.stop(this.ctx.currentTime + 0.05);
       }
       playWin() {
-        if (['lobby', 'login', 'admin', 'pwchange'].includes(state.currentView)) return;
+        if (['lobby', 'login', 'admin', 'pwchange', 'deposit', 'withdraw'].includes(state.currentView)) return;
         this.init();
         let osc = this.ctx.createOscillator(); let g = this.ctx.createGain();
         osc.frequency.setValueAtTime(523.25, this.ctx.currentTime);
@@ -334,7 +414,7 @@ app.get('/', (req, res) => {
         osc.start(); osc.stop(this.ctx.currentTime + 0.35);
       }
       playLoss() {
-        if (['lobby', 'login', 'admin', 'pwchange'].includes(state.currentView)) return;
+        if (['lobby', 'login', 'admin', 'pwchange', 'deposit', 'withdraw'].includes(state.currentView)) return;
         this.init();
         let osc = this.ctx.createOscillator(); osc.type = 'sawtooth'; let g = this.ctx.createGain();
         osc.frequency.setValueAtTime(180, this.ctx.currentTime);
@@ -348,6 +428,7 @@ app.get('/', (req, res) => {
 
     let state = {
       user: null,
+      authMode: 'login',
       currentView: 'login',
       adminSubTab: 'users',
       aviator: { status: 'WAITING', currentX: 1.00, history: [] },
@@ -357,6 +438,7 @@ app.get('/', (req, res) => {
       cashedOut: false,
       popup: null,
       adminUsers: [],
+      adminTxns: [],
       diceRolling: false,
       diceResults: [1, 1],
       marketHistory: [120, 125, 122, 130, 128, 135, 140, 138, 145, 150],
@@ -527,7 +609,7 @@ app.get('/', (req, res) => {
     }
 
     function switchView(targetView) {
-      if (['lobby', 'login', 'admin', 'pwchange'].includes(targetView)) {
+      if (['lobby', 'login', 'admin', 'pwchange', 'deposit', 'withdraw'].includes(targetView)) {
         sound.stopAll();
       }
       state.currentView = targetView;
@@ -565,22 +647,24 @@ app.get('/', (req, res) => {
       render(); 
     }
 
-    async function handleLogin() {
+    async function handleAuth() {
       sound.init();
       const u = document.getElementById('u').value;
       const p = document.getElementById('p').value;
+      const endpoint = state.authMode === 'signup' ? '/api/signup' : '/api/login';
       try {
-        const res = await fetch('/api/login', {
+        const res = await fetch(endpoint, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ username: u, password: p })
         });
+        const data = await res.json();
         if (res.ok) {
-          state.user = await res.json();
+          state.user = data;
           if(!state.user.seenQuestions) state.user.seenQuestions = [];
           switchView(state.user.role === 'admin' ? 'admin' : 'lobby');
-          if (state.user.role === 'admin') fetchAdminUsers();
+          if (state.user.role === 'admin') fetchAdminData();
         } else {
-          showPopup('Invalid credentials', 'Try again');
+          showPopup(data.error || 'Authentication Failed', 'Try again');
         }
       } catch(e) {
         showPopup('Connection Error', 'Try again');
@@ -588,9 +672,13 @@ app.get('/', (req, res) => {
       render();
     }
 
-    async function fetchAdminUsers() {
-      const res = await fetch('/api/admin/users');
-      if (res.ok) state.adminUsers = await res.json();
+    async function fetchAdminData() {
+      const [uRes, tRes] = await Promise.all([
+        fetch('/api/admin/users'),
+        fetch('/api/admin/transactions')
+      ]);
+      if (uRes.ok) state.adminUsers = await uRes.json();
+      if (tRes.ok) state.adminTxns = await tRes.json();
       render();
     }
 
@@ -614,6 +702,47 @@ app.get('/', (req, res) => {
       const data = await res.json();
       if (res.ok) showPopup(data.message, 'OK');
       else showPopup(data.error || 'Error', 'OK');
+    }
+
+    async function submitDeposit() {
+      const amount = document.getElementById('depAmt').value;
+      const txnId = document.getElementById('depTxn').value;
+      const res = await fetch('/api/deposit', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: state.user.username, amount, txnId })
+      });
+      const data = await res.json();
+      if (res.ok) showPopup(data.message, 'OK', () => switchView('lobby'));
+      else showPopup(data.error || 'Deposit Failed', 'OK');
+    }
+
+    async function submitWithdrawal() {
+      const amount = document.getElementById('wdAmt').value;
+      const upiId = document.getElementById('wdUpi').value;
+      const res = await fetch('/api/withdraw', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: state.user.username, amount, upiId })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        state.user.balance = data.newBalance;
+        showPopup(data.message, 'OK', () => switchView('lobby'));
+      } else {
+        showPopup(data.error || 'Withdrawal Failed', 'OK');
+      }
+    }
+
+    async function processTxn(txnId, action) {
+      const res = await fetch('/api/admin/process-transaction', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ txnId, action })
+      });
+      if (res.ok) {
+        fetchAdminData();
+        showPopup('Transaction Processed!', 'OK');
+      } else {
+        showPopup('Action Failed', 'OK');
+      }
     }
 
     function updateBetAmount(delta) {
@@ -1254,20 +1383,27 @@ app.get('/', (req, res) => {
       }
 
       if (state.currentView === 'login') {
+        const isSignUp = state.authMode === 'signup';
         html = \`
           <div class="h-full w-full flex flex-col items-center justify-center p-6 bg-gradient-to-b from-[#2a0404] to-[#0d0202]">
             <div class="tomato-card p-8 rounded-3xl w-full text-center space-y-5">
               <div class="text-6xl">🤑</div>
               <div>
                 <h1 class="text-3xl font-black gold-text tracking-wider">Skilled Old Hand</h1>
-                <p class="text-xs font-semibold text-amber-200/70 mt-1">Shree Ganesh Karte Hai</p>
+                <p class="text-xs font-semibold text-amber-200/70 mt-1">\${isSignUp ? 'Create New Account' : 'Shree Ganesh Karte Hai'}</p>
               </div>
+
+              <div class="flex bg-black/50 p-1 rounded-xl border border-amber-500/30">
+                <button onclick="state.authMode='login'; render();" class="w-1/2 py-2 rounded-lg text-xs font-bold \${!isSignUp ? 'gold-gradient text-black' : 'text-amber-300/60'}\">LOGIN</button>
+                <button onclick="state.authMode='signup'; render();" class="w-1/2 py-2 rounded-lg text-xs font-bold \${isSignUp ? 'gold-gradient text-black' : 'text-amber-300/60'}\">CREATE ACCOUNT</button>
+              </div>
+
               <div class="space-y-3">
                 <input id="u" oninput="checkLoginInputsDirectly()" type="text" placeholder="Username" class="w-full p-4 rounded-2xl bg-black/60 border border-amber-500/40 text-white placeholder-amber-200/40 text-sm outline-none">
                 <input id="p" oninput="checkLoginInputsDirectly()" type="password" placeholder="Password" class="w-full p-4 rounded-2xl bg-black/60 border border-amber-500/40 text-white placeholder-amber-200/40 text-sm outline-none">
               </div>
-              <button id="lbtn" onclick="handleLogin()" class="hidden w-full gold-gradient text-black font-black py-4 rounded-2xl shadow-xl text-lg">
-                Paisa hi Paisa Hoga 💰
+              <button id="lbtn" onclick="handleAuth()" class="hidden w-full gold-gradient text-black font-black py-4 rounded-2xl shadow-xl text-lg">
+                \${isSignUp ? 'REGISTER NOW 🚀' : 'Paisa hi Paisa Hoga 💰'}
               </button>
             </div>
           </div>
@@ -1277,7 +1413,7 @@ app.get('/', (req, res) => {
       else if (state.currentView === 'lobby') {
         html = \`
           <div class="h-full w-full flex flex-col bg-[#120303]">
-            <div class="h-16 px-4 bg-gradient-to-r from-red-950 via-black to-red-950 border-b border-amber-500/40 flex items-center justify-between shadow-lg">
+            <div class="h-16 px-4 bg-gradient-to-r from-red-950 via-black to-red-950 border-b border-amber-500/40 flex items-center justify-between shadow-lg shrink-0">
               <span class="font-black text-lg gold-text">Skilled Old Hand 🤑</span>
               <div class="flex items-center gap-2">
                 <div class="bg-black/60 px-3 py-1.5 rounded-full border border-amber-500/40">
@@ -1288,6 +1424,17 @@ app.get('/', (req, res) => {
                 <button onclick="switchView('login')" class="px-2.5 py-1 bg-red-900/50 border border-red-500/50 rounded-lg text-[10px] font-bold text-red-300">Logout</button>
               </div>
             </div>
+
+            <!-- WALLET ACTIONS BAR -->
+            <div class="p-3 bg-black/40 border-b border-amber-500/20 flex gap-3 shrink-0">
+              <button onclick="switchView('deposit')" class="w-1/2 py-2.5 bg-emerald-700/80 border border-emerald-400/60 rounded-xl font-bold text-white text-xs flex items-center justify-center gap-2 active:scale-95">
+                <span>➕ DEPOSIT</span>
+              </button>
+              <button onclick="switchView('withdraw')" class="w-1/2 py-2.5 bg-amber-700/80 border border-amber-400/60 rounded-xl font-bold text-white text-xs flex items-center justify-center gap-2 active:scale-95">
+                <span>💸 WITHDRAW</span>
+              </button>
+            </div>
+
             <div class="flex-1 p-4 grid grid-cols-2 gap-4 overflow-y-auto">
               \${[
                 { id: 'careerboot', name: 'CareerBoot', icon: '🎓', desc: 'Wheel & MCQ Rounds' },
@@ -1303,6 +1450,43 @@ app.get('/', (req, res) => {
                   </div>
                 </button>
               \`).join('')}
+            </div>
+          </div>
+        \`;
+      }
+
+      else if (state.currentView === 'deposit') {
+        html = \`
+          <div class="h-full w-full flex flex-col bg-[#120303] p-6 justify-center">
+            <div class="tomato-card p-6 rounded-3xl space-y-4">
+              <div class="flex justify-between items-center border-b border-amber-500/40 pb-2">
+                <h2 class="text-xl font-black text-amber-300">Deposit Money</h2>
+                <button onclick="switchView('lobby')" class="text-xs font-bold text-amber-200">Back</button>
+              </div>
+              <div class="bg-black/60 p-4 rounded-2xl border border-amber-500/30 text-center space-y-1">
+                <span class="text-xs text-amber-200/70">Pay via UPI to Official ID:</span>
+                <div class="text-lg font-mono font-black text-amber-300 select-all">kismat420@airtel</div>
+              </div>
+              <input id="depAmt" type="number" placeholder="Enter Amount (₹)" class="w-full p-3 bg-black/60 border border-amber-500/40 rounded-xl text-sm outline-none text-white">
+              <input id="depTxn" type="text" placeholder="Transaction Reference / UTR ID" class="w-full p-3 bg-black/60 border border-amber-500/40 rounded-xl text-sm outline-none text-white">
+              <button onclick="submitDeposit()" class="w-full gold-gradient text-black font-black py-3 rounded-xl text-sm">Submit Deposit</button>
+            </div>
+          </div>
+        \`;
+      }
+
+      else if (state.currentView === 'withdraw') {
+        html = \`
+          <div class="h-full w-full flex flex-col bg-[#120303] p-6 justify-center">
+            <div class="tomato-card p-6 rounded-3xl space-y-4">
+              <div class="flex justify-between items-center border-b border-amber-500/40 pb-2">
+                <h2 class="text-xl font-black text-amber-300">Withdraw Funds</h2>
+                <button onclick="switchView('lobby')" class="text-xs font-bold text-amber-200">Back</button>
+              </div>
+              <div class="text-xs text-amber-200/80">Available Balance: <span class="font-mono text-green-400 font-bold">₹\${state.user.balance.toFixed(2)}</span></div>
+              <input id="wdAmt" type="number" placeholder="Enter Amount (₹)" class="w-full p-3 bg-black/60 border border-amber-500/40 rounded-xl text-sm outline-none text-white">
+              <input id="wdUpi" type="text" placeholder="Your Receiving UPI ID" class="w-full p-3 bg-black/60 border border-amber-500/40 rounded-xl text-sm outline-none text-white">
+              <button onclick="submitWithdrawal()" class="w-full bg-amber-600 border border-amber-400 text-black font-black py-3 rounded-xl text-sm">Request Withdrawal</button>
             </div>
           </div>
         \`;
@@ -1541,9 +1725,10 @@ app.get('/', (req, res) => {
               </div>
             </div>
 
-            <div class="flex gap-2 my-3 shrink-0">
-              <button onclick="state.adminSubTab='users'; render();" class="w-1/2 py-2 rounded-xl font-bold text-xs \${state.adminSubTab==='users' ? 'gold-gradient text-black' : 'bg-gray-800 text-gray-400'}">Users Management</button>
-              <button onclick="state.adminSubTab='create'; render();" class="w-1/2 py-2 rounded-xl font-bold text-xs \${state.adminSubTab==='create' ? 'gold-gradient text-black' : 'bg-gray-800 text-gray-400'}">Create User</button>
+            <div class="flex gap-1 my-3 shrink-0">
+              <button onclick="state.adminSubTab='users'; render();" class="w-1/3 py-2 rounded-xl font-bold text-[10px] \${state.adminSubTab==='users' ? 'gold-gradient text-black' : 'bg-gray-800 text-gray-400'}">Users</button>
+              <button onclick="state.adminSubTab='txns'; render();" class="w-1/3 py-2 rounded-xl font-bold text-[10px] \${state.adminSubTab==='txns' ? 'gold-gradient text-black' : 'bg-gray-800 text-gray-400'}">Requests</button>
+              <button onclick="state.adminSubTab='create'; render();" class="w-1/3 py-2 rounded-xl font-bold text-[10px] \${state.adminSubTab==='create' ? 'gold-gradient text-black' : 'bg-gray-800 text-gray-400'}">Create User</button>
             </div>
 
             <div class="flex-1 overflow-y-auto space-y-4">
@@ -1554,6 +1739,26 @@ app.get('/', (req, res) => {
                   <input id="np" placeholder="New Password" class="w-full p-3 bg-black/60 border border-amber-500/40 rounded-xl text-sm outline-none text-white">
                   <button onclick="createPlayer()" class="w-full gold-gradient text-black font-black py-3 rounded-xl text-sm">Create Account</button>
                 </div>
+              \` : state.adminSubTab === 'txns' ? \`
+                <div class="space-y-2">
+                  <h3 class="font-bold text-xs text-amber-300/80">DEPOSIT & WITHDRAWAL REQUESTS</h3>
+                  \${state.adminTxns.map(t => \`
+                    <div class="bg-black/60 p-3 rounded-xl border border-amber-500/30 text-xs space-y-2">
+                      <div class="flex justify-between font-bold">
+                        <span class="text-amber-300 uppercase">\${t.type} - ₹\${t.amount}</span>
+                        <span class="\${t.status==='approved'?'text-green-400':t.status==='rejected'?'text-red-400':'text-amber-400'} font-bold uppercase">\${t.status}</span>
+                      </div>
+                      <div class="text-[11px] text-gray-300">User: <span class="text-white font-bold">\${t.username}</span></div>
+                      \${t.type === 'deposit' ? \`<div class="text-[10px] font-mono text-gray-400">Txn/UTR ID: \${t.txnId}</div>\` : \`<div class="text-[10px] font-mono text-gray-400">UPI ID: \${t.upiId}</div>\`}
+                      \${t.status === 'pending' ? \`
+                        <div class="flex gap-2 pt-1">
+                          <button onclick="processTxn('\${t._id}', 'approve')" class="w-1/2 py-1.5 bg-emerald-600 rounded-lg text-white font-bold">Approve</button>
+                          <button onclick="processTxn('\${t._id}', 'reject')" class="w-1/2 py-1.5 bg-red-600 rounded-lg text-white font-bold">Reject</button>
+                        </div>
+                      \` : ''}
+                    </div>
+                  \`).join('')}
+                </div>
               \` : \`
                 <div class="tomato-card p-4 rounded-2xl space-y-3">
                   <h3 class="font-bold text-sm text-amber-300">Modify User Balance</h3>
@@ -1563,7 +1768,7 @@ app.get('/', (req, res) => {
                 </div>
 
                 <div class="space-y-2">
-                  <h3 class="font-bold text-xs text-amber-300/80">ALL PLAYERS STATISTICS</h3>
+                  <h3 class="font-bold text-xs text-amber-300/80">ALL REGISTERED PLAYERS STATISTICS</h3>
                   \${state.adminUsers.map(u => \`
                     <div class="bg-black/60 p-3 rounded-xl border border-amber-500/30 text-xs space-y-1">
                       <div class="flex justify-between font-bold text-amber-300">
@@ -1598,7 +1803,7 @@ app.get('/', (req, res) => {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password })
       });
-      if (res.ok) { fetchAdminUsers(); showPopup('User Created Successfully', 'OK'); }
+      if (res.ok) { fetchAdminData(); showPopup('User Created Successfully', 'OK'); }
       else showPopup('Error Creating User', 'try again');
     }
 
@@ -1609,7 +1814,7 @@ app.get('/', (req, res) => {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, amount })
       });
-      if (res.ok) { fetchAdminUsers(); showPopup('Balance Updated!', 'OK'); }
+      if (res.ok) { fetchAdminData(); showPopup('Balance Updated!', 'OK'); }
       else showPopup('User Not Found', 'try again');
     }
 
