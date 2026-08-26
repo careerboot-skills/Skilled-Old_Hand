@@ -19,7 +19,7 @@ const userSchema = new mongoose.Schema({
   username: { type: String, required: true, unique: true },
   password: { type: String, required: true },
   role: { type: String, enum: ['admin', 'player'], default: 'player' },
-  balance: { type: Number, default: 0 }, // Initial balance changed to 0 for real wallet system
+  balance: { type: Number, default: 0 },
   totalWon: { type: Number, default: 0 },
   totalLost: { type: Number, default: 0 },
   totalBetPlaced: { type: Number, default: 0 },
@@ -433,6 +433,7 @@ app.get('/', (req, res) => {
       adminSubTab: 'users',
       aviator: { status: 'WAITING', currentX: 1.00, history: [] },
       userBet: 100,
+      showCustomBetModal: false,
       hasBetAviator: false,
       nextRoundBet: false,
       cashedOut: false,
@@ -753,13 +754,34 @@ app.get('/', (req, res) => {
       else render();
     }
 
+    function openCustomBetModal() {
+      state.showCustomBetModal = true;
+      render();
+      setTimeout(() => {
+        const input = document.getElementById('customBetInput');
+        if (input) input.focus();
+      }, 50);
+    }
+
+    function applyCustomBetAmount() {
+      const input = document.getElementById('customBetInput');
+      const val = parseFloat(input?.value);
+      if (!isNaN(val) && val >= 10) {
+        state.userBet = Math.floor(val);
+      } else {
+        state.userBet = 10;
+      }
+      state.showCustomBetModal = false;
+      render();
+    }
+
     function renderBetControllerUI() {
       return \`
         <div class="flex items-center justify-between bg-black/60 p-2 rounded-2xl border border-amber-500/40 w-full max-w-xs shadow-lg">
           <span class="text-xs text-amber-300 font-bold ml-2">BET AMOUNT:</span>
           <div class="flex items-center gap-2">
             <button onclick="updateBetAmount(-10)" class="w-9 h-9 rounded-xl bg-red-900/80 border border-red-500 text-amber-300 font-black text-lg flex items-center justify-center active:scale-95">-</button>
-            <input type="number" readonly value="\${state.userBet}" class="bet-amt-input w-20 bg-black/80 border border-amber-500/50 rounded-xl text-center font-mono font-bold text-amber-300 py-1.5 text-sm outline-none">
+            <input type="number" readonly onclick="openCustomBetModal()" value="\${state.userBet}" class="bet-amt-input w-20 bg-black/80 border border-amber-500/50 rounded-xl text-center font-mono font-bold text-amber-300 py-1.5 text-sm outline-none cursor-pointer hover:border-amber-400 transition-all">
             <button onclick="updateBetAmount(10)" class="w-9 h-9 rounded-xl bg-emerald-900/80 border border-emerald-500 text-amber-300 font-black text-lg flex items-center justify-center active:scale-95">+</button>
           </div>
         </div>
@@ -1382,6 +1404,22 @@ app.get('/', (req, res) => {
         \`;
       }
 
+      let customBetModalHtml = '';
+      if (state.showCustomBetModal) {
+        customBetModalHtml = \`
+          <div class="absolute inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+            <div class="tomato-card p-6 rounded-3xl max-w-xs w-full text-center space-y-4 popup-anim">
+              <h2 class="text-lg font-black text-amber-300 tracking-wide">Enter Custom Bet Amount</h2>
+              <input id="customBetInput" type="number" min="10" value="\${state.userBet}" placeholder="Enter amount (Min ₹10)" class="w-full p-3 rounded-2xl bg-black/80 border border-amber-500/50 text-amber-300 text-center font-mono font-bold text-lg outline-none">
+              <div class="flex gap-2">
+                <button onclick="state.showCustomBetModal=false; render();" class="w-1/2 py-3 bg-gray-800 text-gray-300 font-bold rounded-2xl active:scale-95 text-xs">Cancel</button>
+                <button onclick="applyCustomBetAmount()" class="w-1/2 gold-gradient text-black font-black py-3 rounded-2xl shadow-xl active:scale-95 text-xs">Set Bet</button>
+              </div>
+            </div>
+          </div>
+        \`;
+      }
+
       if (state.currentView === 'login') {
         const isSignUp = state.authMode === 'signup';
         html = \`
@@ -1789,7 +1827,7 @@ app.get('/', (req, res) => {
         \`;
       }
 
-      app.innerHTML = html + popupHtml;
+      app.innerHTML = html + popupHtml + customBetModalHtml;
 
       if(state.currentView === 'aviator') renderAviatorOverlay();
       if(state.currentView === 'prediction') renderPredictionGraph();
