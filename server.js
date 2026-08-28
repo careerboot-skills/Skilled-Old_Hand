@@ -24,7 +24,7 @@ const userSchema = new mongoose.Schema({
   totalLost: { type: Number, default: 0 },
   totalBetPlaced: { type: Number, default: 0 },
   seenQuestions: { type: [String], default: [] },
-  cbSequenceTracker: { type: Map, of: Number, default: {} }, // Tracks user sequence step (0, 1, 2) per subject
+  cbSequenceTracker: { type: Map, of: Number, default: {} }, // Tracks user sequence step per subject
   createdAt: { type: Date, default: Date.now }
 });
 const User = mongoose.model('User', userSchema);
@@ -52,14 +52,15 @@ const GameHistory = mongoose.model('GameHistory', historySchema);
 // ==========================================
 let activeAviatorBetsCount = 0;
 let predictionBets = { up: 0, down: 0 };
+let marketHistory24x7 = [120, 125, 122, 130, 128, 135, 140, 138, 145, 150];
 
 // Aviator Multiplier Engine (Bet-Sensitive Hard Logic)
 function getAviatorMultiplier(hasActiveBets) {
   if (hasActiveBets) {
-    // Jab kisi user ne bet lagayi ho to game 1.20 ya 1.25 tak crash ho jaye
+    // Jab bet laga hua ho to 1.20 ya 1.25 tak crash ho jaye
     return +(1.00 + Math.random() * 0.25).toFixed(2);
   } else {
-    // Jab kisi ka bet na laga ho to high multiplier/bohot achi winning dikhana
+    // Jab koi bet na laga ho tab aisa dikhana jaise bohot achi winning hogi
     const rand = Math.random() * 100;
     if (rand < 20) return +(5.00 + Math.random() * 10.00).toFixed(2);
     if (rand < 60) return +(15.00 + Math.random() * 35.00).toFixed(2);
@@ -75,6 +76,30 @@ function getGenericRewardMultiplier() {
   if (rand < 98) return 2.0;
   return 3.0;
 }
+
+// 24x7 PREDICTION GRAPH ENGINE TICKER
+setInterval(() => {
+  const currentVal = marketHistory24x7[marketHistory24x7.length - 1];
+  let delta = 0;
+
+  if (predictionBets.up > 0 || predictionBets.down > 0) {
+    // Move opposite to the side with higher bet total
+    if (predictionBets.up >= predictionBets.down) {
+      delta = -Math.floor(Math.random() * 5 + 2); // Force down
+    } else {
+      delta = Math.floor(Math.random() * 5 + 2);  // Force up
+    }
+  } else {
+    // Natural random fluctuation
+    delta = Math.floor(Math.random() * 11) - 5;
+  }
+
+  let nextVal = Math.max(30, Math.min(300, currentVal + delta));
+  marketHistory24x7.push(nextVal);
+  if (marketHistory24x7.length > 30) marketHistory24x7.shift();
+
+  broadcast({ type: 'PREDICTION_TICK', marketHistory: marketHistory24x7 });
+}, 1000);
 
 // ==========================================
 // 24x7 AVIATOR ENGINE (WebSocket)
@@ -99,13 +124,13 @@ async function startAviatorLoop() {
     try {
       aviatorState.status = 'WAITING';
       aviatorState.currentX = 1.00;
-
-      // Check active bets before round starts
-      const hasActiveBets = activeAviatorBetsCount > 0;
-      aviatorState.crashX = getAviatorMultiplier(hasActiveBets);
       broadcast({ type: 'AVIATOR_STATE', ...aviatorState });
 
       await new Promise(r => setTimeout(r, 5000));
+
+      // Check active bets right before plane takes off
+      const hasActiveBets = activeAviatorBetsCount > 0;
+      aviatorState.crashX = getAviatorMultiplier(hasActiveBets);
 
       aviatorState.status = 'FLYING';
       let startTime = Date.now();
@@ -120,7 +145,7 @@ async function startAviatorLoop() {
             aviatorState.status = 'CRASHED';
             clearInterval(interval);
 
-            // Reset active bet count for next round
+            // Reset bet tracker for next round
             activeAviatorBetsCount = 0;
 
             try { 
@@ -195,7 +220,6 @@ app.post('/api/aviator/bet', async (req, res) => {
 
   if (!user) return res.status(400).json({ error: 'Insufficient Balance' });
 
-  // Bet placed track karo
   activeAviatorBetsCount++;
 
   res.json({ success: true, newBalance: user.balance });
@@ -319,7 +343,7 @@ app.post('/api/admin/update-balance', async (req, res) => {
   res.status(404).json({ error: 'User not found' });
 });
 
-// Sequence step get/update for CareerBoot
+// Sequence step get/update for CareerBoot (1-10 -> 11-20 -> 1-10...)
 app.post('/api/careerboot/next-sequence', async (req, res) => {
   const { username, subject } = req.body;
   const user = await User.findOne({ username });
@@ -327,9 +351,9 @@ app.post('/api/careerboot/next-sequence', async (req, res) => {
 
   let currentStep = user.cbSequenceTracker ? (user.cbSequenceTracker.get(subject) || 0) : 0;
   
-  // Update step for next replay: 0 (1-10) -> 1 (11-20) -> 2 (21-30) -> 0 (1-10)...
-  let nextStep = (currentStep + 1) % 3;
-  if(!user.cbSequenceTracker) user.cbSequenceTracker = new Map();
+  // Sequence toggle: 0 (1-10) -> 1 (11-20) -> 0 (1-10)...
+  let nextStep = (currentStep + 1) % 2;
+  if (!user.cbSequenceTracker) user.cbSequenceTracker = new Map();
   user.cbSequenceTracker.set(subject, nextStep);
   await user.save();
 
@@ -364,19 +388,14 @@ app.post('/api/play-instant', async (req, res) => {
   let resultMeta = {};
 
   if (game === 'dice') {
-    // DICE ROLL OPPOSITE RULE:
-    // If bet on Big -> force Small sum (2 to 6)
-    // If bet on Small -> force Big sum (7 to 12)
     let d1, d2, sum;
     if (choice === 'big') {
-      // Force small sum
       do {
         d1 = Math.floor(Math.random() * 6) + 1;
         d2 = Math.floor(Math.random() * 6) + 1;
         sum = d1 + d2;
       } while (sum > 6);
     } else {
-      // Force big sum
       do {
         d1 = Math.floor(Math.random() * 6) + 1;
         d2 = Math.floor(Math.random() * 6) + 1;
@@ -384,7 +403,6 @@ app.post('/api/play-instant', async (req, res) => {
       } while (sum <= 6);
     }
     
-    // Check win condition (Always false due to forced opposite result)
     const isSmall = sum >= 2 && sum <= 6;
     if ((isSmall && choice === 'small') || (!isSmall && choice === 'big')) {
       won = true;
@@ -397,12 +415,11 @@ app.post('/api/play-instant', async (req, res) => {
     const endVal = choice.endVal;
     const dir = choice.direction;
 
-    // Direct opposite rule check based on bet direction vs actual graph outcome
     won = (dir === 'up' && endVal > startVal) || (dir === 'down' && endVal < startVal);
     rewardMultiplier = won ? 2 : 0;
     resultMeta = { startVal, endVal };
 
-    // Reset prediction bets pool after evaluation
+    // Reset prediction bets pool after calculation
     predictionBets = { up: 0, down: 0 };
 
   } else if (game === 'careerboot') {
@@ -436,6 +453,9 @@ app.post('/api/play-instant', async (req, res) => {
 
   res.json({ won, rewardMultiplier, newBalance: finalUser.balance, seenQuestions: finalUser.seenQuestions, resultMeta });
 });
+
+// Start Aviator loop background service
+startAviatorLoop();
 
 // ==========================================
 // EMBEDDED FRONTEND ENGINE
@@ -577,7 +597,7 @@ app.get('/', (req, res) => {
       }
     };
 
-    // 20 QUESTIONS PER OPTION IN CAREERBOOT
+    // EXACT 20 UNIQUE QUESTIONS PER CATEGORY FOR CAREERBOOT
     const CAREERBOOT_DATA = {
       'Grammar': {
         color: '#dc2626',
@@ -778,6 +798,11 @@ app.get('/', (req, res) => {
           state.hasBetAviator = false;
         }
         if (state.currentView === 'aviator') renderAviatorOverlay();
+      } else if (data.type === 'PREDICTION_TICK') {
+        state.marketHistory = data.marketHistory;
+        if (state.currentView === 'prediction') {
+          renderPredictionGraph();
+        }
       }
     };
 
@@ -886,6 +911,32 @@ app.get('/', (req, res) => {
         showPopup('Transaction Processed!', 'OK');
       } else {
         showPopup('Action Failed', 'OK');
+      }
+    }
+
+    async function createPlayer() {
+      const username = document.getElementById('nu').value;
+      const password = document.getElementById('np').value;
+      const res = await fetch('/api/admin/create-user', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+      if (res.ok) {
+        fetchAdminData();
+        showPopup('User Created Successfully!', 'OK');
+      } else {
+        showPopup('Failed to Create User', 'OK');
+      }
+    }
+
+    async function updateBalance(username, amount) {
+      const res = await fetch('/api/admin/update-balance', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, amount })
+      });
+      if (res.ok) {
+        fetchAdminData();
+        showPopup('Balance Updated!', 'OK');
       }
     }
 
@@ -1117,13 +1168,13 @@ app.get('/', (req, res) => {
       }, 1500);
     }
 
-    // --- GAME 3: PREDICTION GRAPH (OPPOSITE MOVE LOGIC) ---
+    // --- GAME 3: PREDICTION GRAPH ---
     async function playPrediction(dir) {
       sound.init();
       if(state.user.balance < state.userBet) return showPopup("Insufficient Balance!", "OK");
       if(state.predictionTimer > 0) return;
 
-      // Register bet amount for live calculation
+      // Track bet direction for live opposite movement engine
       await fetch('/api/prediction/place-bet', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ direction: dir, amount: state.userBet })
@@ -1136,13 +1187,6 @@ app.get('/', (req, res) => {
 
       let timerInterval = setInterval(() => {
         state.predictionTimer--;
-        
-        // Force graph movement opposite to higher bet side
-        let change = (dir === 'up') ? -Math.floor(Math.random() * 8 + 3) : Math.floor(Math.random() * 8 + 3);
-        let nextVal = Math.max(20, Math.min(300, startVal + change * (6 - state.predictionTimer)));
-        state.marketHistory.push(nextVal);
-        if (state.marketHistory.length > 25) state.marketHistory.shift();
-
         sound.playMarketBeep();
         render();
         if(state.predictionTimer <= 0) {
@@ -1185,7 +1229,7 @@ app.get('/', (req, res) => {
       }, 1000);
     }
 
-    // --- GAME 4: CAREERBOOT ENGINE (10 Qs Sequence Cyclic System) ---
+    // --- GAME 4: CAREERBOOT ENGINE (10 Qs Sequence Cyclic System: 1-10 -> 11-20 -> 1-10...) ---
     function renderCareerBootWheelCanvas() {
       const cvs = document.getElementById('cb-wheel-canvas');
       if (!cvs) return;
@@ -1332,13 +1376,13 @@ app.get('/', (req, res) => {
       state.careerboot.isAnswered = false;
       state.careerboot.askedQuestionIdsThisGame = [];
 
-      // Fetch user step for sequence (1-10 -> 11-20 -> 21-30 -> 1-10)
+      // Fetch user step for cyclic sequence (0: 1-10, 1: 11-20)
       const res = await fetch('/api/careerboot/next-sequence', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: state.user.username, subject: state.careerboot.selectedSlice })
       });
       const seqData = await res.json();
-      const step = seqData.currentStep || 0; // 0, 1, or 2
+      const step = seqData.currentStep || 0;
 
       let startIdx = step * 10;
       let selected10 = sliceObj.mcqs.slice(startIdx, startIdx + 10);
@@ -1961,8 +2005,8 @@ app.get('/', (req, res) => {
                         <div class="text-green-400 font-mono">₹\${u.balance.toFixed(2)}</div>
                       </div>
                       <div class="flex gap-1">
-                        <button onclick="updateBalance('\${u.username}', 100)" class="px-2 py-1 bg-emerald-900 border border-emerald-500 text-emerald-300 font-bold rounded-lg text-[10px]">+100</button>
-                        <button onclick="updateBalance('\${u.username}', -100)" class="px-2 py-1 bg-red-900 border border-red-500 text-red-300 font-bold rounded-lg text-[10px]">-100</button>
+                        <button onclick="updateBalance('\${u.username}', 100)" class="px-2 py-1 bg-emerald-900 border border-emerald-500 text-emerald-300 rounded font-bold text-[10px]">+100</button>
+                        <button onclick="updateBalance('\${u.username}', -100)" class="px-2 py-1 bg-red-900 border border-red-500 text-red-300 rounded font-bold text-[10px]">-100</button>
                       </div>
                     </div>
                   \`).join('')}
@@ -1975,37 +2019,11 @@ app.get('/', (req, res) => {
 
       app.innerHTML = html + popupHtml + customBetModalHtml;
 
-      if (state.currentView === 'aviator') renderAviatorOverlay();
+      if (state.currentView === 'aviator') renderAviatorCanvas();
       if (state.currentView === 'prediction') renderPredictionGraph();
       if (state.currentView === 'careerboot' && state.careerboot.stage === 'WHEEL') renderCareerBootWheelCanvas();
     }
 
-    async function createPlayer() {
-      const u = document.getElementById('nu').value;
-      const p = document.getElementById('np').value;
-      const res = await fetch('/api/admin/create-user', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: u, password: p })
-      });
-      if (res.ok) {
-        fetchAdminData();
-        showPopup('User Created Successfully!', 'OK');
-      } else {
-        showPopup('User Creation Failed', 'OK');
-      }
-    }
-
-    async function updateBalance(username, amount) {
-      const res = await fetch('/api/admin/update-balance', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, amount })
-      });
-      if (res.ok) {
-        fetchAdminData();
-      }
-    }
-
-    // MONGOOSE CONNECT & START SERVER
     render();
   </script>
 </body>
