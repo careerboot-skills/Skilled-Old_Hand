@@ -54,19 +54,23 @@ let activeAviatorBetsCount = 0;
 let predictionBets = { up: 0, down: 0 };
 let marketHistory24x7 = [120, 125, 122, 130, 128, 135, 140, 138, 145, 150];
 
-// Aviator Multiplier Engine (Bet-Sensitive Hard Logic)
+// Aviator Multiplier Engine (Fixed Non-Repeating Crash Logic)
 function getAviatorMultiplier(hasActiveBets) {
+  let val = 1.00;
   if (hasActiveBets) {
-    // Jab bet laga hua ho to 1.20 ya 1.25 tak crash ho jaye
-    return +(1.00 + Math.random() * 0.25).toFixed(2);
+    // Jab bet laga hua ho to 1.05 se 1.25 tak crash ho jaye with random jitter
+    val = 1.01 + Math.random() * 0.24;
   } else {
-    // Jab koi bet na laga ho tab aisa dikhana jaise bohot achi winning hogi
+    // Jab koi bet na laga ho tab organic high multiplier generate kare
     const rand = Math.random() * 100;
-    if (rand < 20) return +(5.00 + Math.random() * 10.00).toFixed(2);
-    if (rand < 60) return +(15.00 + Math.random() * 35.00).toFixed(2);
-    if (rand < 90) return +(50.00 + Math.random() * 100.00).toFixed(2);
-    return +(150.00 + Math.random() * 300.00).toFixed(2);
+    if (rand < 20) val = 5.00 + Math.random() * 10.00;
+    else if (rand < 60) val = 15.00 + Math.random() * 35.00;
+    else if (rand < 90) val = 50.00 + Math.random() * 100.00;
+    else val = 150.00 + Math.random() * 300.00;
   }
+  // Add micro-jitter to completely prevent same crash number sequence repeats
+  val += (Math.random() * 0.08);
+  return +val.toFixed(2);
 }
 
 function getGenericRewardMultiplier() {
@@ -83,14 +87,12 @@ setInterval(() => {
   let delta = 0;
 
   if (predictionBets.up > 0 || predictionBets.down > 0) {
-    // Move opposite to the side with higher bet total
     if (predictionBets.up >= predictionBets.down) {
       delta = -Math.floor(Math.random() * 5 + 2); // Force down
     } else {
       delta = Math.floor(Math.random() * 5 + 2);  // Force up
     }
   } else {
-    // Natural random fluctuation
     delta = Math.floor(Math.random() * 11) - 5;
   }
 
@@ -102,7 +104,7 @@ setInterval(() => {
 }, 1000);
 
 // ==========================================
-// 24x7 AVIATOR ENGINE (WebSocket)
+// 24x7 AVIATOR ENGINE (WebSocket & Non-blocking)
 // ==========================================
 let aviatorState = { status: 'WAITING', currentX: 1.00, crashX: 1.00, history: [] };
 
@@ -112,64 +114,64 @@ function broadcast(data) {
   });
 }
 
-async function startAviatorLoop() {
+async function initAviatorHistory() {
   try {
     const docs = await GameHistory.find({ game: 'aviator' }).sort({ timestamp: -1 }).limit(20);
     aviatorState.history = docs.map(d => d.multiplier);
   } catch (err) {
     console.error("History fetch error:", err.message);
   }
-
-  while (true) {
-    try {
-      aviatorState.status = 'WAITING';
-      aviatorState.currentX = 1.00;
-      broadcast({ type: 'AVIATOR_STATE', ...aviatorState });
-
-      await new Promise(r => setTimeout(r, 5000));
-
-      // Check active bets right before plane takes off
-      const hasActiveBets = activeAviatorBetsCount > 0;
-      aviatorState.crashX = getAviatorMultiplier(hasActiveBets);
-
-      aviatorState.status = 'FLYING';
-      let startTime = Date.now();
-
-      await new Promise(resolve => {
-        const interval = setInterval(async () => {
-          let elapsed = (Date.now() - startTime) / 1000;
-          aviatorState.currentX = +(Math.pow(1.06, elapsed * 2.2)).toFixed(2);
-
-          if (aviatorState.currentX >= aviatorState.crashX) {
-            aviatorState.currentX = aviatorState.crashX;
-            aviatorState.status = 'CRASHED';
-            clearInterval(interval);
-
-            // Reset bet tracker for next round
-            activeAviatorBetsCount = 0;
-
-            try { 
-              await GameHistory.create({ game: 'aviator', multiplier: aviatorState.crashX }); 
-            } catch (e) {
-              console.error("GameHistory save error:", e.message);
-            }
-
-            aviatorState.history.unshift(aviatorState.crashX);
-            if (aviatorState.history.length > 20) aviatorState.history.pop();
-
-            broadcast({ type: 'AVIATOR_STATE', ...aviatorState });
-            setTimeout(resolve, 2000);
-          } else {
-            broadcast({ type: 'AVIATOR_STATE', ...aviatorState });
-          }
-        }, 100);
-      });
-    } catch (loopErr) {
-      console.error("Loop iteration error:", loopErr.message);
-      await new Promise(r => setTimeout(r, 2000));
-    }
-  }
 }
+
+function runAviatorCycle() {
+  aviatorState.status = 'WAITING';
+  aviatorState.currentX = 1.00;
+  broadcast({ type: 'AVIATOR_STATE', ...aviatorState });
+
+  // 5 Second Waiting Phase
+  setTimeout(() => {
+    const hasActiveBets = activeAviatorBetsCount > 0;
+    aviatorState.crashX = getAviatorMultiplier(hasActiveBets);
+    aviatorState.status = 'FLYING';
+    
+    let startTime = Date.now();
+
+    const flyInterval = setInterval(async () => {
+      let elapsed = (Date.now() - startTime) / 1000;
+      let nextX = +(Math.pow(1.06, elapsed * 2.2)).toFixed(2);
+
+      if (nextX >= aviatorState.crashX) {
+        clearInterval(flyInterval);
+        aviatorState.currentX = aviatorState.crashX;
+        aviatorState.status = 'CRASHED';
+
+        // Reset bet tracker for next round
+        activeAviatorBetsCount = 0;
+
+        try { 
+          await GameHistory.create({ game: 'aviator', multiplier: aviatorState.crashX }); 
+        } catch (e) {
+          console.error("GameHistory save error:", e.message);
+        }
+
+        aviatorState.history.unshift(aviatorState.crashX);
+        if (aviatorState.history.length > 20) aviatorState.history.pop();
+
+        broadcast({ type: 'AVIATOR_STATE', ...aviatorState });
+
+        // Wait 2.5s on crashed state, then restart loop cleanly
+        setTimeout(runAviatorCycle, 2500);
+      } else {
+        aviatorState.currentX = nextX;
+        broadcast({ type: 'AVIATOR_STATE', ...aviatorState });
+      }
+    }, 100);
+
+  }, 5000);
+}
+
+// Start Aviator Game Engine cleanly
+initAviatorHistory().then(() => runAviatorCycle());
 
 // ==========================================
 // HTTP APIs & AUTH
@@ -351,7 +353,6 @@ app.post('/api/careerboot/next-sequence', async (req, res) => {
 
   let currentStep = user.cbSequenceTracker ? (user.cbSequenceTracker.get(subject) || 0) : 0;
   
-  // Sequence toggle: 0 (1-10) -> 1 (11-20) -> 0 (1-10)...
   let nextStep = (currentStep + 1) % 2;
   if (!user.cbSequenceTracker) user.cbSequenceTracker = new Map();
   user.cbSequenceTracker.set(subject, nextStep);
@@ -360,7 +361,7 @@ app.post('/api/careerboot/next-sequence', async (req, res) => {
   res.json({ currentStep });
 });
 
-// PREDICTION REGISTER BET API (To track pool totals)
+// PREDICTION REGISTER BET API
 app.post('/api/prediction/place-bet', async (req, res) => {
   const { direction, amount } = req.body;
   const num = parseFloat(amount) || 0;
@@ -419,7 +420,6 @@ app.post('/api/play-instant', async (req, res) => {
     rewardMultiplier = won ? 2 : 0;
     resultMeta = { startVal, endVal };
 
-    // Reset prediction bets pool after calculation
     predictionBets = { up: 0, down: 0 };
 
   } else if (game === 'careerboot') {
@@ -453,9 +453,6 @@ app.post('/api/play-instant', async (req, res) => {
 
   res.json({ won, rewardMultiplier, newBalance: finalUser.balance, seenQuestions: finalUser.seenQuestions, resultMeta });
 });
-
-// Start Aviator loop background service
-startAviatorLoop();
 
 // ==========================================
 // EMBEDDED FRONTEND ENGINE
@@ -597,7 +594,6 @@ app.get('/', (req, res) => {
       }
     };
 
-    // EXACT 20 UNIQUE QUESTIONS PER CATEGORY FOR CAREERBOOT
     const CAREERBOOT_DATA = {
       'Grammar': {
         color: '#dc2626',
@@ -1095,7 +1091,7 @@ app.get('/', (req, res) => {
         xElem.className = \`text-5xl font-black font-mono \${state.aviator.status === 'CRASHED' ? 'text-red-500' : 'text-amber-400'}\`;
       }
       if (statusElem) {
-        statusElem.innerText = state.aviator.status === 'WAITING' ? 'WAITING FOR NEXT ROUND (5s)' : (state.aviator.status === 'FLYING' ? 'FLYING' : 'FLEW AWAY!');
+        statusElem.innerText = state.aviator.status === 'WAITING' ? 'WAITING FOR NEXT ROUND' : (state.aviator.status === 'FLYING' ? 'FLYING' : 'FLEW AWAY!');
         statusElem.className = \`text-xs font-bold px-3 py-1 rounded-full \${state.aviator.status === 'FLYING' ? 'bg-amber-900/80 text-amber-300 border border-amber-500' : 'bg-red-900/80 text-red-300 border border-red-500'}\`;
       }
 
@@ -1174,7 +1170,6 @@ app.get('/', (req, res) => {
       if(state.user.balance < state.userBet) return showPopup("Insufficient Balance!", "OK");
       if(state.predictionTimer > 0) return;
 
-      // Track bet direction for live opposite movement engine
       await fetch('/api/prediction/place-bet', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ direction: dir, amount: state.userBet })
@@ -1229,7 +1224,7 @@ app.get('/', (req, res) => {
       }, 1000);
     }
 
-    // --- GAME 4: CAREERBOOT ENGINE (10 Qs Sequence Cyclic System: 1-10 -> 11-20 -> 1-10...) ---
+    // --- GAME 4: CAREERBOOT ENGINE ---
     function renderCareerBootWheelCanvas() {
       const cvs = document.getElementById('cb-wheel-canvas');
       if (!cvs) return;
@@ -1376,7 +1371,6 @@ app.get('/', (req, res) => {
       state.careerboot.isAnswered = false;
       state.careerboot.askedQuestionIdsThisGame = [];
 
-      // Fetch user step for cyclic sequence (0: 1-10, 1: 11-20)
       const res = await fetch('/api/careerboot/next-sequence', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: state.user.username, subject: state.careerboot.selectedSlice })
@@ -1923,28 +1917,14 @@ app.get('/', (req, res) => {
             <div class="flex-1 flex flex-col items-center justify-between p-3 space-y-3">
               <div class="w-full flex-1 bg-gradient-to-b from-[#090d16] to-[#04060a] border-2 border-emerald-500/30 rounded-3xl relative overflow-hidden flex flex-col p-2 min-h-[280px] shadow-[0_0_20px_rgba(16,185,129,0.15)]">
                 <canvas id="market-canvas" class="absolute inset-0 w-full h-full"></canvas>
-                <div class="relative z-10 flex justify-between items-center p-2 pointer-events-none">
-                  <div class="flex items-center gap-2 bg-black/80 backdrop-blur-md px-3 py-1.5 rounded-2xl border border-emerald-500/40 shadow-lg">
-                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></span>
-                    <span class="text-xs font-bold text-emerald-400 uppercase tracking-widest">LIVE</span>
-                    <span class="text-sm font-mono font-black text-white ml-1">₹\${state.marketHistory[state.marketHistory.length - 1]}</span>
-                  </div>
-                  \${state.predictionTimer > 0 ? \`
-                    <div class="text-xs font-mono font-black text-amber-300 bg-amber-950/90 backdrop-blur-md px-3 py-1.5 rounded-2xl border border-amber-500/60 animate-pulse shadow-lg">
-                      LOCKING IN \${state.predictionTimer}s
-                    </div>
-                  \` : ''}
-                </div>
               </div>
               \${renderBetControllerUI()}
-              <div class="grid grid-cols-2 gap-4 w-full max-w-xs shrink-0">
-                <button onclick="playPrediction('up')" class="bg-gradient-to-b from-emerald-500 to-emerald-700 border-2 border-emerald-400 h-14 rounded-2xl font-black text-lg active:scale-95 text-white shadow-[0_0_15px_rgba(16,185,129,0.4)] flex items-center justify-center gap-2">
-                  <span>UP</span>
-                  <span class="text-xl">📈</span>
+              <div class="grid grid-cols-2 gap-3 w-full max-w-xs">
+                <button onclick="playPrediction('up')" \${state.predictionTimer > 0 ? 'disabled' : ''} class="h-14 bg-emerald-600 border-2 border-emerald-400 text-white font-black text-lg rounded-2xl shadow-lg active:scale-95 flex items-center justify-center gap-2">
+                  <span>UP ⬆️</span>
                 </button>
-                <button onclick="playPrediction('down')" class="bg-gradient-to-b from-red-600 to-red-800 border-2 border-red-400 h-14 rounded-2xl font-black text-lg active:scale-95 text-white shadow-[0_0_15px_rgba(239,68,68,0.4)] flex items-center justify-center gap-2">
-                  <span>DOWN</span>
-                  <span class="text-xl">📉</span>
+                <button onclick="playPrediction('down')" \${state.predictionTimer > 0 ? 'disabled' : ''} class="h-14 bg-red-600 border-2 border-red-400 text-white font-black text-lg rounded-2xl shadow-lg active:scale-95 flex items-center justify-center gap-2">
+                  <span>DOWN ⬇️</span>
                 </button>
               </div>
             </div>
@@ -1954,60 +1934,53 @@ app.get('/', (req, res) => {
 
       else if (state.currentView === 'admin') {
         html = \`
-          <div class="h-full w-full flex flex-col bg-[#0b0202] p-4 overflow-hidden">
-            <div class="flex justify-between items-center border-b border-amber-500/40 pb-3 shrink-0">
-              <h1 class="text-lg font-black gold-text">Admin Panel (Boss)</h1>
-              <div class="flex gap-2">
-                <button onclick="switchView('pwchange')" class="bg-amber-800 border border-amber-500 px-2 py-1 rounded-xl text-xs font-bold text-white">Password</button>
-                <button onclick="switchView('login')" class="bg-red-900 border border-red-500 px-2 py-1 rounded-xl text-xs font-bold text-white">Logout</button>
-              </div>
+          <div class="h-full w-full flex flex-col bg-[#120303]">
+            <div class="h-14 px-3 bg-red-950 border-b border-amber-500/40 flex items-center justify-between">
+              <span class="font-black gold-text">ADMIN PANEL</span>
+              <button onclick="switchView('login')" class="px-3 py-1 bg-red-900 border border-amber-500/40 rounded-xl text-xs font-bold text-white">Logout</button>
             </div>
-
-            <div class="flex gap-1 my-3 shrink-0">
-              <button onclick="state.adminSubTab='users'; render();" class="w-1/3 py-2 rounded-xl font-bold text-[10px] \${state.adminSubTab==='users' ? 'gold-gradient text-black' : 'bg-gray-800 text-gray-400'}">Users</button>
-              <button onclick="state.adminSubTab='txns'; render();" class="w-1/3 py-2 rounded-xl font-bold text-[10px] \${state.adminSubTab==='txns' ? 'gold-gradient text-black' : 'bg-gray-800 text-gray-400'}">Requests</button>
-              <button onclick="state.adminSubTab='create'; render();" class="w-1/3 py-2 rounded-xl font-bold text-[10px] \${state.adminSubTab==='create' ? 'gold-gradient text-black' : 'bg-gray-800 text-gray-400'}">Create User</button>
+            <div class="flex bg-black/50 p-1 border-b border-amber-500/20">
+              <button onclick="state.adminSubTab='users'; render();" class="w-1/2 py-2 text-xs font-bold \${state.adminSubTab === 'users' ? 'gold-gradient text-black' : 'text-amber-300/60'}\">USERS</button>
+              <button onclick="state.adminSubTab='txns'; render();" class="w-1/2 py-2 text-xs font-bold \${state.adminSubTab === 'txns' ? 'gold-gradient text-black' : 'text-amber-300/60'}\">TRANSACTIONS</button>
             </div>
-
-            <div class="flex-1 overflow-y-auto space-y-4">
-              \${state.adminSubTab === 'create' ? \`
-                <div class="tomato-card p-4 rounded-2xl space-y-3">
-                  <h3 class="font-bold text-sm text-amber-300">Create Player Account</h3>
-                  <input id="nu" placeholder="New Username" class="w-full p-3 bg-black/60 border border-amber-500/40 rounded-xl text-sm outline-none text-white">
-                  <input id="np" placeholder="New Password" class="w-full p-3 bg-black/60 border border-amber-500/40 rounded-xl text-sm outline-none text-white">
-                  <button onclick="createPlayer()" class="w-full gold-gradient text-black font-black py-3 rounded-xl text-sm">Create Account</button>
+            <div class="flex-1 p-4 overflow-y-auto space-y-4">
+              \${state.adminSubTab === 'users' ? \`
+                <div class="tomato-card p-4 rounded-2xl space-y-2">
+                  <h3 class="text-sm font-bold text-amber-300">Create New Player</h3>
+                  <div class="flex gap-2">
+                    <input id="nu" type="text" placeholder="Username" class="w-1/2 p-2 bg-black/60 border border-amber-500/40 rounded-xl text-xs text-white outline-none">
+                    <input id="np" type="password" placeholder="Password" class="w-1/2 p-2 bg-black/60 border border-amber-500/40 rounded-xl text-xs text-white outline-none">
+                  </div>
+                  <button onclick="createPlayer()" class="w-full gold-gradient text-black font-black py-2 rounded-xl text-xs">Create User</button>
                 </div>
-              \` : state.adminSubTab === 'txns' ? \`
                 <div class="space-y-2">
-                  <h3 class="font-bold text-xs text-amber-300/80">DEPOSIT & WITHDRAWAL REQUESTS</h3>
-                  \${state.adminTxns.map(t => \`
-                    <div class="bg-black/60 p-3 rounded-xl border border-amber-500/30 flex justify-between items-center text-xs">
+                  \${state.adminUsers.map(u => \`
+                    <div class="bg-black/60 p-3 rounded-2xl border border-amber-500/30 flex justify-between items-center text-xs">
                       <div>
-                        <div class="font-bold text-amber-300">\${t.username} (\${t.type.toUpperCase()})</div>
-                        <div class="text-amber-100/70">₹\${t.amount} | \${t.txnId || t.upiId}</div>
+                        <div class="font-bold text-amber-300">\${u.username}</div>
+                        <div class="text-[10px] text-green-400 font-mono">₹\${u.balance.toFixed(2)}</div>
                       </div>
-                      \${t.status === 'pending' ? \`
-                        <div class="flex gap-1">
-                          <button onclick="processTxn('\${t._id}', 'approve')" class="px-2 py-1 bg-emerald-700 text-white font-bold rounded-lg text-[10px]">Approve</button>
-                          <button onclick="processTxn('\${t._id}', 'reject')" class="px-2 py-1 bg-red-700 text-white font-bold rounded-lg text-[10px]">Reject</button>
-                        </div>
-                      \` : \`<span class="font-bold uppercase text-[10px] \${t.status==='approved'?'text-green-400':'text-red-400'}">\${t.status}</span>\`}
+                      <div class="flex gap-1">
+                        <button onclick="updateBalance('\${u.username}', 100)" class="px-2 py-1 bg-emerald-700 text-white rounded font-bold">+100</button>
+                        <button onclick="updateBalance('\${u.username}', -100)" class="px-2 py-1 bg-red-700 text-white rounded font-bold">-100</button>
+                      </div>
                     </div>
                   \`).join('')}
                 </div>
               \` : \`
                 <div class="space-y-2">
-                  <h3 class="font-bold text-xs text-amber-300/80">PLAYER MANAGEMENT</h3>
-                  \${state.adminUsers.map(u => \`
-                    <div class="bg-black/60 p-3 rounded-xl border border-amber-500/30 flex justify-between items-center text-xs">
+                  \${state.adminTxns.map(t => \`
+                    <div class="bg-black/60 p-3 rounded-2xl border border-amber-500/30 flex justify-between items-center text-xs">
                       <div>
-                        <div class="font-bold text-amber-300">\${u.username}</div>
-                        <div class="text-green-400 font-mono">₹\${u.balance.toFixed(2)}</div>
+                        <div class="font-bold text-amber-300">\${t.username} (\${t.type.toUpperCase()})</div>
+                        <div class="text-[10px] text-amber-200/70 font-mono">₹\${t.amount} | Status: \${t.status}</div>
                       </div>
-                      <div class="flex gap-1">
-                        <button onclick="updateBalance('\${u.username}', 100)" class="px-2 py-1 bg-emerald-900 border border-emerald-500 text-emerald-300 rounded font-bold text-[10px]">+100</button>
-                        <button onclick="updateBalance('\${u.username}', -100)" class="px-2 py-1 bg-red-900 border border-red-500 text-red-300 rounded font-bold text-[10px]">-100</button>
-                      </div>
+                      \${t.status === 'pending' ? \`
+                        <div class="flex gap-1">
+                          <button onclick="processTxn('\${t._id}', 'approve')" class="px-2 py-1 bg-emerald-700 text-white rounded font-bold">Approve</button>
+                          <button onclick="processTxn('\${t._id}', 'reject')" class="px-2 py-1 bg-red-700 text-white rounded font-bold">Reject</button>
+                        </div>
+                      \` : ''}
                     </div>
                   \`).join('')}
                 </div>
@@ -2019,9 +1992,9 @@ app.get('/', (req, res) => {
 
       app.innerHTML = html + popupHtml + customBetModalHtml;
 
-      if (state.currentView === 'aviator') renderAviatorCanvas();
-      if (state.currentView === 'prediction') renderPredictionGraph();
-      if (state.currentView === 'careerboot' && state.careerboot.stage === 'WHEEL') renderCareerBootWheelCanvas();
+      if(state.currentView === 'aviator') renderAviatorOverlay();
+      if(state.currentView === 'prediction') renderPredictionGraph();
+      if(state.currentView === 'careerboot' && state.careerboot.stage === 'WHEEL') renderCareerBootWheelCanvas();
     }
 
     render();
