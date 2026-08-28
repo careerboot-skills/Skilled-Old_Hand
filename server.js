@@ -513,21 +513,6 @@ app.get('/', (req, res) => {
       }
     };
 
-    function generate15kQuestions(category, prefix, sampleTemplates) {
-      const mcqs = [];
-      for (let i = 1; i <= 3750; i++) {
-        sampleTemplates.forEach((tmpl, idx) => {
-          mcqs.push({
-            id: \`\${prefix}_\${i}_\${idx}\`,
-            q: \`[#\${i}] \${tmpl.q}\`,
-            opts: tmpl.opts,
-            a: tmpl.a
-          });
-        });
-      }
-      return mcqs;
-    }
-
     const CAREERBOOT_DATA = {
       'Grammar': {
         color: '#dc2626',
@@ -549,12 +534,18 @@ app.get('/', (req, res) => {
             <p><strong>9. Modifiers & Relative Pronouns:</strong> Adverbs modify adjectives ("exceptionally clear"). Use "whose" to demonstrate relative possession ("The client whose account closed"). Avoid double comparatives like "more smarter".</p>
           </div>
         \`,
-        mcqs: generate15kQuestions('Grammar', 'GMR', [
-          { q: "Identify the correctly punctuated sentence.", opts: ["The manager, and supervisor agreed.", "The manager and supervisor agreed.", "The manager, and supervisor, agreed.", "The manager and supervisor, agreed."], a: 1 },
-          { q: "Which word correctly completes: 'Neither of the applicants ___ qualified.'", opts: ["are", "is", "were", "have"], a: 1 },
-          { q: "Choose the sentence with correct subject-verb agreement.", opts: ["Data shows great progress.", "The team are winning.", "A group of experts is presenting.", "Both is arriving today."], a: 2 },
-          { q: "Which phrase contains a dangling modifier?", opts: ["Having finished the report, the computer crashed.", "After completing the audit, she left.", "To succeed, practice daily.", "While reviewing numbers, we saw mistakes."], a: 0 }
-        ])
+        mcqs: [
+          { id: "GMR_1", q: "Identify the correctly punctuated sentence.", opts: ["The manager, and supervisor agreed.", "The manager and supervisor agreed.", "The manager, and supervisor, agreed.", "The manager and supervisor, agreed."], a: 1 },
+          { id: "GMR_2", q: "Which word correctly completes: 'Neither of the applicants ___ qualified.'", opts: ["are", "is", "were", "have"], a: 1 },
+          { id: "GMR_3", q: "Choose the sentence with correct subject-verb agreement.", opts: ["Data shows great progress.", "The team are winning.", "A group of experts is presenting.", "Both is arriving today."], a: 2 },
+          { id: "GMR_4", q: "Which phrase contains a dangling modifier?", opts: ["Having finished the report, the computer crashed.", "After completing the audit, she left.", "To succeed, practice daily.", "While reviewing numbers, we saw mistakes."], a: 0 },
+          { id: "GMR_5", q: "Select the correct pronoun: 'Give the file to John and ___.'", opts: ["I", "me", "myself", "mine"], a: 1 },
+          { id: "GMR_6", q: "Choose the sentence showing possessive usage.", opts: ["It's a great opportunity.", "The bird lost its feather.", "Its going to rain today.", "They're house is big."], a: 1 },
+          { id: "GMR_7", q: "Which sentence demonstrates proper parallel structure?", opts: ["He likes reading, writing, and to edit.", "He likes reading, writing, and editing.", "He likes to read, writing, and edit.", "He likes read, write, and editing."], a: 1 },
+          { id: "GMR_8", q: "Identify the sentence written in Active Voice.", opts: ["The report was finalized by the committee.", "The committee finalized the report.", "A decision was made by management.", "The project was approved."], a: 1 },
+          { id: "GMR_9", q: "Complete the subjunctive sentence: 'If I ___ the CEO, I would expand operations.'", opts: ["was", "were", "am", "be"], a: 1 },
+          { id: "GMR_10", q: "Choose the correct word: 'The new policy will ___ all employees.'", opts: ["effect", "affect", "effective", "affects"], a: 1 }
+        ]
       },
       'Vocabulary': {
         color: '#2563eb',
@@ -576,12 +567,18 @@ app.get('/', (req, res) => {
             <p><strong>9. Practical Strategy:</strong> "Pragmatic" approaches focus on practical, realistic outcomes over idealist theories.</p>
           </div>
         \`,
-        mcqs: generate15kQuestions('Vocabulary', 'VOC', [
-          { q: "What does 'Mitigate' mean?", opts: ["Increase severity", "Lessen or reduce harm", "Duplicate records", "Delay execution"], a: 1 },
-          { q: "Choose the synonym for 'Synergy'.", opts: ["Isolation", "Combined effectiveness", "Conflict", "Division"], a: 1 },
-          { q: "What is the meaning of 'Pivot' in business?", opts: ["Close operations", "Maintain current strategy", "Strategic change in course", "File for bankruptcy"], a: 2 },
-          { q: "Define 'Feasible'.", opts: ["Impossible to execute", "Possible and practical", "Expensive", "Theoretical only"], a: 1 }
-        ])
+        mcqs: [
+          { id: "VOC_1", q: "What does 'Mitigate' mean?", opts: ["Increase severity", "Lessen or reduce harm", "Duplicate records", "Delay execution"], a: 1 },
+          { id: "VOC_2", q: "Choose the synonym for 'Synergy'.", opts: ["Isolation", "Combined effectiveness", "Conflict", "Division"], a: 1 },
+          { id: "VOC_3", q: "What is the meaning of 'Pivot' in business?", opts: ["Close operations", "Maintain current strategy", "Strategic change in course", "File for bankruptcy"], a: 2 },
+          { id: "VOC_4", q: "Define 'Feasible'.", opts: ["Impossible to execute", "Possible and practical", "Expensive", "Theoretical only"], a: 1 },
+          { id: "VOC_5", q: "What is a 'Paradigm'?", opts: ["A financial metric", "A standard pattern or model", "A legal complaint", "An error in calculation"], a: 1 },
+          { id: "VOC_6", q: "What is the opposite of 'Transparent'?", opts: ["Clear", "Opaque", "Lucid", "Visible"], a: 1 },
+          { id: "VOC_7", q: "What does 'Fiduciary' relate to?", opts: ["Legal & ethical financial trust", "Physical product marketing", "Software coding", "Human resources hiring"], a: 0 },
+          { id: "VOC_8", q: "What is a 'Bottleneck' in workflow?", opts: ["A point of congestion or delay", "A marketing victory", "A cash bonus", "An expansion model"], a: 0 },
+          { id: "VOC_9", q: "What does 'Pragmatic' mean?", opts: ["Theoretical", "Practical and realistic", "Emotional", "Unpredictable"], a: 1 },
+          { id: "VOC_10", q: "Define 'Discrepancy'.", opts: ["An inconsistency or difference", "An exact match", "A complete agreement", "A monthly report"], a: 0 }
+        ]
       },
       'MS Excel': {
         color: '#059669',
@@ -603,12 +600,18 @@ app.get('/', (req, res) => {
             <p><strong>9. Data Filtering & Shortcuts:</strong> Filtering isolates specific rows matching rules. CTRL + Z performs undo actions instantly.</p>
           </div>
         \`,
-        mcqs: generate15kQuestions('MS Excel', 'EXC', [
-          { q: "Which formula searches for a value in the leftmost column of a table?", opts: ["XLOOKUP", "VLOOKUP", "HLOOKUP", "INDEX"], a: 1 },
-          { q: "What symbol freezes cell references in Excel (Absolute Reference)?", opts: ["#", "$", "%", "&"], a: 1 },
-          { q: "Which feature rapidly summarizes large sets of operational data?", opts: ["Data Validation", "Pivot Table", "Conditional Formatting", "Goal Seek"], a: 1 },
-          { q: "What does #N/A mean in Excel?", opts: ["Value not available", "Number overflow", "Column width small", "Division by zero"], a: 0 }
-        ])
+        mcqs: [
+          { id: "EXC_1", q: "Which formula searches for a value in the leftmost column of a table?", opts: ["XLOOKUP", "VLOOKUP", "HLOOKUP", "INDEX"], a: 1 },
+          { id: "EXC_2", q: "What symbol freezes cell references in Excel (Absolute Reference)?", opts: ["#", "$", "%", "&"], a: 1 },
+          { id: "EXC_3", q: "Which feature rapidly summarizes large sets of operational data?", opts: ["Data Validation", "Pivot Table", "Conditional Formatting", "Goal Seek"], a: 1 },
+          { id: "EXC_4", q: "What does #N/A mean in Excel?", opts: ["Value not available", "Number overflow", "Column width small", "Division by zero"], a: 0 },
+          { id: "EXC_5", q: "Which function removes trailing and leading extra spaces from text?", opts: ["CLEAN()", "TRIM()", "REMOVE()", "UPPER()"], a: 1 },
+          { id: "EXC_6", q: "What is the shortcut key to Undo an action in Excel?", opts: ["Ctrl + Y", "Ctrl + Z", "Ctrl + X", "Ctrl + U"], a: 1 },
+          { id: "EXC_7", q: "Which function counts cells that meet a single specific condition?", opts: ["COUNT", "COUNTA", "COUNTIF", "SUMIF"], a: 2 },
+          { id: "EXC_8", q: "What does #DIV/0! error indicate?", opts: ["Reference invalid", "Divided by zero", "Formula name error", "Value missing"], a: 1 },
+          { id: "EXC_9", q: "Which key toggles absolute and relative cell referencing when editing a formula?", opts: ["F2", "F4", "F8", "F11"], a: 1 },
+          { id: "EXC_10", q: "Which modern function replaces VLOOKUP without left-side limitations?", opts: ["LOOKUP", "MATCH", "XLOOKUP", "SEARCH"], a: 2 }
+        ]
       },
       'Business analytics': {
         color: '#d97706',
@@ -629,12 +632,18 @@ app.get('/', (req, res) => {
             <p><strong>8. Cohort Analysis:</strong> Cohort analysis tracks specific user groups sharing common characteristics over predefined timeframes.</p>
           </div>
         \`,
-        mcqs: generate15kQuestions('Business analytics', 'BSA', [
-          { q: "What type of analytics explains 'What happened in the past'?", opts: ["Predictive", "Descriptive", "Prescriptive", "Diagnostic"], a: 1 },
-          { q: "What does KPI stand for?", opts: ["Key Process Integration", "Key Performance Indicator", "Known Program Insight", "Key Profit Index"], a: 1 },
-          { q: "What metric tracks customer turnover/loss rate?", opts: ["Churn Rate", "Bounce Rate", "Retention Index", "LTV"], a: 0 },
-          { q: "What does LTV stand for in customer analytics?", opts: ["Long Term Value", "Lifetime Value", "Last Transaction Valuation", "Lead Total Value"], a: 1 }
-        ])
+        mcqs: [
+          { id: "BSA_1", q: "What type of analytics explains 'What happened in the past'?", opts: ["Predictive", "Descriptive", "Prescriptive", "Diagnostic"], a: 1 },
+          { id: "BSA_2", q: "What does KPI stand for?", opts: ["Key Process Integration", "Key Performance Indicator", "Known Program Insight", "Key Profit Index"], a: 1 },
+          { id: "BSA_3", q: "What metric tracks customer turnover/loss rate?", opts: ["Churn Rate", "Bounce Rate", "Retention Index", "LTV"], a: 0 },
+          { id: "BSA_4", q: "What does LTV stand for in customer analytics?", opts: ["Long Term Value", "Lifetime Value", "Last Transaction Valuation", "Lead Total Value"], a: 1 },
+          { id: "BSA_5", q: "What testing methodology compares two variations to see which performs better?", opts: ["A/B Testing", "Unit Testing", "Stress Testing", "Alpha Testing"], a: 0 },
+          { id: "BSA_6", q: "What analytics type recommends specific operational actions?", opts: ["Descriptive", "Diagnostic", "Predictive", "Prescriptive"], a: 3 },
+          { id: "BSA_7", q: "What does CAC represent in business metrics?", opts: ["Customer Acquisition Cost", "Company Asset Capital", "Client Access Channel", "Cumulative Account Credit"], a: 0 },
+          { id: "BSA_8", q: "Which chart is best suited for showing numeric trends over continuous time?", opts: ["Pie Chart", "Line Chart", "Donut Chart", "Scatter Plot"], a: 1 },
+          { id: "BSA_9", q: "What is an extreme data point far removed from other observations called?", opts: ["Mean", "Median", "Outlier", "Variance"], a: 2 },
+          { id: "BSA_10", q: "What is tracking user groups with shared characteristics over time called?", opts: ["Cohort Analysis", "Regression", "Factor Analysis", "Segmentation"], a: 0 }
+        ]
       }
     };
 
@@ -1252,26 +1261,13 @@ app.get('/', (req, res) => {
       state.careerboot.isAnswered = false;
       state.careerboot.askedQuestionIdsThisGame = [];
 
-      const seenSet = new Set(state.user.seenQuestions || []);
-      
-      let availableMCQs = sliceObj.mcqs.filter(m => !seenSet.has(m.id));
-
-      if (availableMCQs.length < 15) {
-        const catPrefixes = { 'Grammar': 'GMR_', 'Vocabulary': 'VOC_', 'MS Excel': 'EXC_', 'Business analytics': 'BSA_' };
-        const prefix = catPrefixes[state.careerboot.selectedSlice];
-        if (prefix) {
-          state.user.seenQuestions = (state.user.seenQuestions || []).filter(id => !id.startsWith(prefix));
-        }
-        availableMCQs = [...sliceObj.mcqs];
-      }
-
-      const shuffled = [...availableMCQs];
+      const shuffled = [...sliceObj.mcqs];
       for (let i = shuffled.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
       }
 
-      state.careerboot.activeQuestions = shuffled.slice(0, 15);
+      state.careerboot.activeQuestions = shuffled;
       state.careerboot.askedQuestionIdsThisGame = state.careerboot.activeQuestions.map(q => q.id);
 
       state.careerboot.stage = 'MCQ';
@@ -1285,7 +1281,7 @@ app.get('/', (req, res) => {
       state.careerboot.isAnswered = true;
 
       const currentRound = state.careerboot.round;
-      const qIdx = (currentRound - 1) * 5 + state.careerboot.questionIndex;
+      const qIdx = state.careerboot.questionIndex;
       const currentQ = state.careerboot.activeQuestions[qIdx];
 
       render();
@@ -1299,39 +1295,33 @@ app.get('/', (req, res) => {
           state.careerboot.selectedAnswer = null;
           state.careerboot.isAnswered = false;
 
-          if (state.careerboot.questionIndex < 4) {
+          if (state.careerboot.questionIndex < state.careerboot.activeQuestions.length - 1) {
             state.careerboot.questionIndex++;
           } else {
-            if (currentRound < 3) {
-              state.careerboot.round++;
-              state.careerboot.questionIndex = 0;
-              showPopup(\`ROUND \${currentRound} COMPLETED! Next Round Multiplier Unlocked!\`, 'Continue');
-            } else {
-              const finalMult = state.careerboot.accumulatedMultiplier;
-              const res = await fetch('/api/play-instant', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  username: state.user.username,
-                  game: 'careerboot',
-                  betAmount: state.userBet,
-                  choice: {
-                    won: true,
-                    multiplier: finalMult,
-                    askedQuestionIds: state.careerboot.askedQuestionIdsThisGame
-                  }
-                })
-              });
-              const data = await res.json();
-              if (res.ok) {
-                state.user.balance = data.newBalance;
-                state.user.seenQuestions = data.seenQuestions || [];
-              }
-
-              sound.playWin();
-              showPopup(\`ALL ROUNDS PASSED! Total Multiplier \${finalMult.toFixed(2)}x! WON ₹\${(state.userBet * finalMult).toFixed(2)}!\`, 'Paisa hi Paisa', () => {
-                state.careerboot.stage = 'WHEEL';
-              });
+            const finalMult = state.careerboot.accumulatedMultiplier;
+            const res = await fetch('/api/play-instant', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                username: state.user.username,
+                game: 'careerboot',
+                betAmount: state.userBet,
+                choice: {
+                  won: true,
+                  multiplier: finalMult,
+                  askedQuestionIds: state.careerboot.askedQuestionIdsThisGame
+                }
+              })
+            });
+            const data = await res.json();
+            if (res.ok) {
+              state.user.balance = data.newBalance;
+              state.user.seenQuestions = data.seenQuestions || [];
             }
+
+            sound.playWin();
+            showPopup(\`ALL QUESTIONS PASSED! Total Multiplier \${finalMult.toFixed(2)}x! WON ₹\${(state.userBet * finalMult).toFixed(2)}!\`, 'Paisa hi Paisa', () => {
+              state.careerboot.stage = 'WHEEL';
+            });
           }
           render();
         }, 1000);
@@ -1679,19 +1669,18 @@ app.get('/', (req, res) => {
             </div>
           \`;
         } else if (cb.stage === 'MCQ') {
-          const qIdx = (cb.round - 1) * 5 + cb.questionIndex;
+          const qIdx = cb.questionIndex;
           const qObj = cb.activeQuestions[qIdx];
-          const roundMultText = cb.round === 1 ? '+1.40x' : (cb.round === 2 ? '+1.60x' : '+2.00x');
 
           html = \`
             <div class="h-full w-full flex flex-col bg-[#120303]">
               <div class="h-14 px-3 bg-red-950 border-b border-amber-500/40 flex items-center justify-between shrink-0">
-                <span class="text-xs font-bold text-amber-300">ROUND \${cb.round}/3</span>
+                <span class="text-xs font-bold text-amber-300">QUESTION \${qIdx + 1}/\${cb.activeQuestions.length}</span>
                 <span class="font-black gold-text uppercase">\${cb.selectedSlice}</span>
-                <span class="text-xs font-mono font-bold text-green-400">MULT: \${roundMultText}</span>
+                <span class="text-xs font-mono font-bold text-green-400">MULT: +1.5x</span>
               </div>
               <div class="p-3 bg-black/40 border-b border-amber-500/20 flex justify-between items-center shrink-0">
-                <span class="text-xs text-amber-200/70 font-semibold">Question \${cb.questionIndex + 1} of 5 (Total 15)</span>
+                <span class="text-xs text-amber-200/70 font-semibold">Question \${qIdx + 1} of \${cb.activeQuestions.length}</span>
                 <span class="text-xs font-mono text-amber-300 font-bold">ACCUMULATED: \${cb.accumulatedMultiplier.toFixed(2)}x</span>
               </div>
               <div class="flex-1 p-5 flex flex-col justify-between overflow-y-auto">
@@ -1955,7 +1944,7 @@ app.get('/', (req, res) => {
         body: JSON.stringify({ username, amount })
       });
       if (res.ok) { fetchAdminData(); showPopup('Balance Updated!', 'OK'); }
-      else showPopup('User Not Found', 'try again');
+      else showPopup('User Not Found', 'OK');
     }
 
     render();
@@ -1966,35 +1955,19 @@ app.get('/', (req, res) => {
 });
 
 // ==========================================
-// SERVER INITIALIZATION ENGINE
+// DB CONNECT & SERVER INITIALIZATION
 // ==========================================
-const PORT = process.env.PORT || 10000;
-const MONGO_URI = process.env.MONGODB_URI;
+const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/skilled_old_hand';
+const PORT = process.env.PORT || 3000;
 
-async function startServer() {
-  if (!MONGO_URI) {
-    console.error("CRITICAL ERROR: MONGODB_URI environment variable missing!");
-    process.exit(1);
-  }
-  try {
-    await mongoose.connect(MONGO_URI, { serverSelectionTimeoutMS: 5000 });
-    console.log("MongoDB Connected Successfully");
-    
-    const boss = await User.findOne({ username: 'Boss' });
-    if (!boss) {
-      const hashedPassword = await bcrypt.hash('BigBoss', 10);
-      await User.create({ username: 'Boss', password: hashedPassword, role: 'admin', balance: 999999 });
-      console.log("Default Admin Account Created: Boss / BigBoss");
-    }
-
+mongoose.connect(MONGO_URI)
+  .then(() => {
+    console.log('MongoDB Connected Successfully');
     server.listen(PORT, () => {
-      console.log(`Server running on port ${PORT}`);
+      console.log(`Server running on http://localhost:${PORT}`);
       startAviatorLoop();
     });
-  } catch (err) {
-    console.error("Database connection error:", err.message);
-    process.exit(1);
-  }
-}
-
-startServer();
+  })
+  .catch(err => {
+    console.error('Database connection error:', err.message);
+  });
