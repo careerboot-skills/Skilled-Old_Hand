@@ -384,7 +384,7 @@ app.get('/', (req, res) => {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Skilled Old Hand ðŸ¤‘</title>
+  <title>Skilled Old Hand 🤑</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     * { box-sizing: border-box; touch-action: manipulation; }
@@ -897,7 +897,7 @@ app.get('/', (req, res) => {
             if (res.ok) {
               state.user.balance = data.newBalance;
               sound.playWin();
-              showPopup(\`CASHED OUT AT \${state.aviator.currentX.toFixed(2)}x! WON â‚¹\${data.winAmount}\`, 'Paisa hi Paisa');
+              showPopup(\`CASHED OUT AT \${state.aviator.currentX.toFixed(2)}x! WON ₹\${data.winAmount}\`, 'Paisa hi Paisa');
             } else {
               showPopup(data.error || 'Cashout Failed', 'OK');
             }
@@ -947,7 +947,7 @@ app.get('/', (req, res) => {
         ctx.translate(endX, endY);
         if(state.aviator.status === 'CRASHED') {
           ctx.font = '32px sans-serif';
-          ctx.fillText('ðŸ’¥', -16, 12);
+          ctx.fillText('💥', -16, 12);
         } else {
           ctx.rotate(-Math.PI / 8);
           ctx.fillStyle = '#ef4444';
@@ -984,12 +984,12 @@ app.get('/', (req, res) => {
       if (actionBtn) {
         if (state.aviator.status === 'WAITING') {
           actionBtn.disabled = state.hasBetAviator;
-          actionBtn.innerHTML = state.hasBetAviator ? 'BET PLACED FOR NEXT ROUND' : \`BET â‚¹\${state.userBet}\`;
+          actionBtn.innerHTML = state.hasBetAviator ? 'BET PLACED FOR NEXT ROUND' : \`BET ₹\${state.userBet}\`;
           actionBtn.className = \`w-full h-14 rounded-2xl font-black text-xl tracking-wider transition-all shadow-lg \${state.hasBetAviator ? 'bg-gray-700 text-gray-400' : 'bg-red-600 text-white border-2 border-red-400'}\`;
         } else if (state.aviator.status === 'FLYING') {
           if (state.hasBetAviator && !state.cashedOut) {
             actionBtn.disabled = false;
-            actionBtn.innerHTML = \`CASH OUT (â‚¹\${(state.userBet * state.aviator.currentX).toFixed(2)})\`;
+            actionBtn.innerHTML = \`CASH OUT (₹\${(state.userBet * state.aviator.currentX).toFixed(2)})\`;
             actionBtn.className = 'w-full h-14 rounded-2xl font-black text-xl tracking-wider shadow-lg bg-emerald-500 text-black border-2 border-green-300 animate-pulse';
           } else if (state.nextRoundBet) {
             actionBtn.disabled = true;
@@ -997,7 +997,7 @@ app.get('/', (req, res) => {
             actionBtn.className = 'w-full h-14 rounded-2xl font-black text-lg tracking-wider shadow-lg bg-amber-700 text-amber-200 border border-amber-500';
           } else {
             actionBtn.disabled = false;
-            actionBtn.innerHTML = \`BET FOR NEXT ROUND (â‚¹\${state.userBet})\`;
+            actionBtn.innerHTML = \`BET FOR NEXT ROUND (₹\${state.userBet})\`;
             actionBtn.className = 'w-full h-14 rounded-2xl font-black text-lg tracking-wider shadow-lg bg-red-700 text-white border border-red-400';
           }
         } else {
@@ -1038,7 +1038,7 @@ app.get('/', (req, res) => {
           setTimeout(() => {
             if (data.won) {
               sound.playWin();
-              showPopup(\`MATCHED! Sum is \${data.resultMeta.sum}. WON â‚¹\${(state.userBet * data.rewardMultiplier).toFixed(2)} (\${data.rewardMultiplier}x)!\`, 'Paisa hi Paisa');
+              showPopup(\`MATCHED! Sum is \${data.resultMeta.sum}. WON ₹\${(state.userBet * data.rewardMultiplier).toFixed(2)} (\${data.rewardMultiplier}x)!\`, 'Paisa hi Paisa');
             } else {
               sound.playLoss();
               showPopup(\`MISMATCH! Sum is \${data.resultMeta.sum}. YOU LOST!\`, 'Try Again');
@@ -1088,12 +1088,12 @@ app.get('/', (req, res) => {
           state.user.balance = data.newBalance;
           if (data.won) {
             sound.playWin();
-            showPopup(\`SUCCESS! Entry: â‚¹\${startVal} | Exit: â‚¹\${endVal}. WON â‚¹\${(state.userBet * 2).toFixed(2)}!\`, 'Paisa hi Paisa', () => {
+            showPopup(\`SUCCESS! Entry: ₹\${startVal} | Exit: ₹\${endVal}. WON ₹\${(state.userBet * 2).toFixed(2)}!\`, 'Paisa hi Paisa', () => {
               state.predictionMark1 = null; state.predictionMark2 = null;
             });
           } else {
             sound.playLoss();
-            showPopup(\`FAILED! Entry: â‚¹\${startVal} | Exit: â‚¹\${endVal}. YOU LOST!\`, 'Try Again', () => {
+            showPopup(\`FAILED! Entry: ₹\${startVal} | Exit: ₹\${endVal}. YOU LOST!\`, 'Try Again', () => {
               state.predictionMark1 = null; state.predictionMark2 = null;
             });
           }
@@ -1256,7 +1256,7 @@ app.get('/', (req, res) => {
       
       let availableMCQs = sliceObj.mcqs.filter(m => !seenSet.has(m.id));
 
-      if (availableMCQs.length < 15) {
+      if (availableMCQs.length < 30) {
         const catPrefixes = { 'Grammar': 'GMR_', 'Vocabulary': 'VOC_', 'MS Excel': 'EXC_', 'Business analytics': 'BSA_' };
         const prefix = catPrefixes[state.careerboot.selectedSlice];
         if (prefix) {
@@ -1271,7 +1271,7 @@ app.get('/', (req, res) => {
         [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
       }
 
-      state.careerboot.activeQuestions = shuffled.slice(0, 15);
+      state.careerboot.activeQuestions = shuffled.slice(0, 30);
       state.careerboot.askedQuestionIdsThisGame = state.careerboot.activeQuestions.map(q => q.id);
 
       state.careerboot.stage = 'MCQ';
@@ -1285,7 +1285,7 @@ app.get('/', (req, res) => {
       state.careerboot.isAnswered = true;
 
       const currentRound = state.careerboot.round;
-      const qIdx = (currentRound - 1) * 5 + state.careerboot.questionIndex;
+      const qIdx = (currentRound - 1) * 10 + state.careerboot.questionIndex;
       const currentQ = state.careerboot.activeQuestions[qIdx];
 
       render();
@@ -1299,7 +1299,7 @@ app.get('/', (req, res) => {
           state.careerboot.selectedAnswer = null;
           state.careerboot.isAnswered = false;
 
-          if (state.careerboot.questionIndex < 4) {
+          if (state.careerboot.questionIndex < 9) {
             state.careerboot.questionIndex++;
           } else {
             if (currentRound < 3) {
@@ -1328,7 +1328,7 @@ app.get('/', (req, res) => {
               }
 
               sound.playWin();
-              showPopup(\`ALL ROUNDS PASSED! Total Multiplier \${finalMult.toFixed(2)}x! WON â‚¹\${(state.userBet * finalMult).toFixed(2)}!\`, 'Paisa hi Paisa', () => {
+              showPopup(\`ALL ROUNDS PASSED! Total Multiplier \${finalMult.toFixed(2)}x! WON ₹\${(state.userBet * finalMult).toFixed(2)}!\`, 'Paisa hi Paisa', () => {
                 state.careerboot.stage = 'WHEEL';
               });
             }
@@ -1358,7 +1358,7 @@ app.get('/', (req, res) => {
         }
 
         setTimeout(() => {
-          showPopup(\`WRONG ANSWER! Correct answer highlighted in green. YOU LOST â‚¹\${state.userBet}.\`, 'Try Again', () => {
+          showPopup(\`WRONG ANSWER! Correct answer highlighted in green. YOU LOST ₹\${state.userBet}.\`, 'Try Again', () => {
             state.careerboot.selectedAnswer = null;
             state.careerboot.isAnswered = false;
             state.careerboot.stage = 'WHEEL';
@@ -1450,7 +1450,7 @@ app.get('/', (req, res) => {
       ctx.fillStyle = '#ffffff';
       ctx.fill();
 
-      drawRoundedRect(ctx, lastX - 68, lastY - 26, 62, 20, 6, '#22c55e', '#000000', 'â‚¹' + lastVal);
+      drawRoundedRect(ctx, lastX - 68, lastY - 26, 62, 20, 6, '#22c55e', '#000000', '₹' + lastVal);
 
       if (state.predictionMark1) {
         let y1 = h - ((state.predictionMark1 - minVal) / range) * (h - 30) - 15;
@@ -1465,7 +1465,7 @@ app.get('/', (req, res) => {
         ctx.setLineDash([]);
         ctx.shadowBlur = 0;
 
-        drawRoundedRect(ctx, 8, y1 - 20, 100, 18, 4, '#eab308', '#000000', 'ENTRY: â‚¹' + state.predictionMark1);
+        drawRoundedRect(ctx, 8, y1 - 20, 100, 18, 4, '#eab308', '#000000', 'ENTRY: ₹' + state.predictionMark1);
       }
 
       if (state.predictionMark2) {
@@ -1481,7 +1481,7 @@ app.get('/', (req, res) => {
         ctx.setLineDash([]);
         ctx.shadowBlur = 0;
 
-        drawRoundedRect(ctx, w - 108, y2 - 20, 100, 18, 4, '#06b6d4', '#000000', 'EXIT: â‚¹' + state.predictionMark2);
+        drawRoundedRect(ctx, w - 108, y2 - 20, 100, 18, 4, '#06b6d4', '#000000', 'EXIT: ₹' + state.predictionMark2);
       }
     }
 
@@ -1512,7 +1512,7 @@ app.get('/', (req, res) => {
           <div class="absolute inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
             <div class="tomato-card p-6 rounded-3xl max-w-xs w-full text-center space-y-4 popup-anim">
               <h2 class="text-lg font-black text-amber-300 tracking-wide">Enter Custom Bet Amount</h2>
-              <input id="customBetInput" type="number" min="10" value="\${state.userBet}" placeholder="Enter amount (Min â‚¹10)" class="w-full p-3 rounded-2xl bg-black/80 border border-amber-500/50 text-amber-300 text-center font-mono font-bold text-lg outline-none">
+              <input id="customBetInput" type="number" min="10" value="\${state.userBet}" placeholder="Enter amount (Min ₹10)" class="w-full p-3 rounded-2xl bg-black/80 border border-amber-500/50 text-amber-300 text-center font-mono font-bold text-lg outline-none">
               <div class="flex gap-2">
                 <button onclick="state.showCustomBetModal=false; render();" class="w-1/2 py-3 bg-gray-800 text-gray-300 font-bold rounded-2xl active:scale-95 text-xs">Cancel</button>
                 <button onclick="applyCustomBetAmount()" class="w-1/2 gold-gradient text-black font-black py-3 rounded-2xl shadow-xl active:scale-95 text-xs">Set Bet</button>
@@ -1527,7 +1527,7 @@ app.get('/', (req, res) => {
         html = \`
           <div class="h-full w-full flex flex-col items-center justify-center p-6 bg-gradient-to-b from-[#2a0404] to-[#0d0202]">
             <div class="tomato-card p-8 rounded-3xl w-full text-center space-y-5">
-              <div class="text-6xl">ðŸ¤‘</div>
+              <div class="text-6xl">🤑</div>
               <div>
                 <h1 class="text-3xl font-black gold-text tracking-wider">Skilled Old Hand</h1>
                 <p class="text-xs font-semibold text-amber-200/70 mt-1">\${isSignUp ? 'Create New Account' : 'Shree Ganesh Karte Hai'}</p>
@@ -1543,7 +1543,7 @@ app.get('/', (req, res) => {
                 <input id="p" oninput="checkLoginInputsDirectly()" type="password" placeholder="Password" class="w-full p-4 rounded-2xl bg-black/60 border border-amber-500/40 text-white placeholder-amber-200/40 text-sm outline-none">
               </div>
               <button id="lbtn" onclick="handleAuth()" class="hidden w-full gold-gradient text-black font-black py-4 rounded-2xl shadow-xl text-lg">
-                \${isSignUp ? 'REGISTER NOW ðŸš€' : 'Paisa hi Paisa Hoga ðŸ’°'}
+                \${isSignUp ? 'REGISTER NOW 🚀' : 'Paisa hi Paisa Hoga 💰'}
               </button>
             </div>
           </div>
@@ -1554,10 +1554,10 @@ app.get('/', (req, res) => {
         html = \`
           <div class="h-full w-full flex flex-col bg-[#120303]">
             <div class="h-16 px-4 bg-gradient-to-r from-red-950 via-black to-red-950 border-b border-amber-500/40 flex items-center justify-between shadow-lg shrink-0">
-              <span class="font-black text-lg gold-text">Skilled Old Hand ðŸ¤‘</span>
+              <span class="font-black text-lg gold-text">Skilled Old Hand 🤑</span>
               <div class="flex items-center gap-2">
                 <div class="bg-black/60 px-3 py-1.5 rounded-full border border-amber-500/40">
-                  <span class="text-xs text-amber-300 font-bold">â‚¹</span>
+                  <span class="text-xs text-amber-300 font-bold">₹</span>
                   <span class="text-sm font-mono font-bold text-green-400">\${state.user.balance.toFixed(2)}</span>
                 </div>
                 <button onclick="switchView('pwchange')" class="px-2.5 py-1 bg-amber-600/30 border border-amber-500/50 rounded-lg text-[10px] font-bold text-amber-300">Password</button>
@@ -1568,19 +1568,19 @@ app.get('/', (req, res) => {
             <!-- WALLET ACTIONS BAR -->
             <div class="p-3 bg-black/40 border-b border-amber-500/20 flex gap-3 shrink-0">
               <button onclick="switchView('deposit')" class="w-1/2 py-2.5 bg-emerald-700/80 border border-emerald-400/60 rounded-xl font-bold text-white text-xs flex items-center justify-center gap-2 active:scale-95">
-                <span>âž• DEPOSIT</span>
+                <span>➕ DEPOSIT</span>
               </button>
               <button onclick="switchView('withdraw')" class="w-1/2 py-2.5 bg-amber-700/80 border border-amber-400/60 rounded-xl font-bold text-white text-xs flex items-center justify-center gap-2 active:scale-95">
-                <span>ðŸ’¸ WITHDRAW</span>
+                <span>💸 WITHDRAW</span>
               </button>
             </div>
 
             <div class="flex-1 p-4 grid grid-cols-2 gap-4 overflow-y-auto">
               \${[
-                { id: 'careerboot', name: 'CareerBoot', icon: 'ðŸŽ“', desc: 'Wheel & MCQ Rounds' },
-                { id: 'aviator', name: 'Aviator', icon: 'ðŸš€', desc: 'Realtime Multiplier' },
-                { id: 'guesscorrect', name: 'Guess Correct', icon: 'ðŸŽ²', desc: 'Big vs Small Dice' },
-                { id: 'prediction', name: 'Prediction', icon: 'ðŸ“ˆ', desc: 'Live Market Line' }
+                { id: 'careerboot', name: 'CareerBoot', icon: '🎓', desc: 'Wheel & MCQ Rounds' },
+                { id: 'aviator', name: 'Aviator', icon: '🚀', desc: 'Realtime Multiplier' },
+                { id: 'guesscorrect', name: 'Guess Correct', icon: '🎲', desc: 'Big vs Small Dice' },
+                { id: 'prediction', name: 'Prediction', icon: '📈', desc: 'Live Market Line' }
               ].map(g => \`
                 <button onclick="switchView('\${g.id}')" class="tomato-card p-4 rounded-3xl flex flex-col items-center justify-center text-center space-y-2 active:scale-95 transition-all">
                   <span class="text-4xl">\${g.icon}</span>
@@ -1607,7 +1607,7 @@ app.get('/', (req, res) => {
                 <span class="text-xs text-amber-200/70">Pay via UPI to Official ID:</span>
                 <div class="text-lg font-mono font-black text-amber-300 select-all">kismat420@airtel</div>
               </div>
-              <input id="depAmt" type="number" placeholder="Enter Amount (â‚¹)" class="w-full p-3 bg-black/60 border border-amber-500/40 rounded-xl text-sm outline-none text-white">
+              <input id="depAmt" type="number" placeholder="Enter Amount (₹)" class="w-full p-3 bg-black/60 border border-amber-500/40 rounded-xl text-sm outline-none text-white">
               <input id="depTxn" type="text" placeholder="Transaction Reference / UTR ID" class="w-full p-3 bg-black/60 border border-amber-500/40 rounded-xl text-sm outline-none text-white">
               <button onclick="submitDeposit()" class="w-full gold-gradient text-black font-black py-3 rounded-xl text-sm">Submit Deposit</button>
             </div>
@@ -1623,8 +1623,8 @@ app.get('/', (req, res) => {
                 <h2 class="text-xl font-black text-amber-300">Withdraw Funds</h2>
                 <button onclick="switchView('lobby')" class="text-xs font-bold text-amber-200">Back</button>
               </div>
-              <div class="text-xs text-amber-200/80">Available Balance: <span class="font-mono text-green-400 font-bold">â‚¹\${state.user.balance.toFixed(2)}</span></div>
-              <input id="wdAmt" type="number" placeholder="Enter Amount (â‚¹)" class="w-full p-3 bg-black/60 border border-amber-500/40 rounded-xl text-sm outline-none text-white">
+              <div class="text-xs text-amber-200/80">Available Balance: <span class="font-mono text-green-400 font-bold">₹\${state.user.balance.toFixed(2)}</span></div>
+              <input id="wdAmt" type="number" placeholder="Enter Amount (₹)" class="w-full p-3 bg-black/60 border border-amber-500/40 rounded-xl text-sm outline-none text-white">
               <input id="wdUpi" type="text" placeholder="Your Receiving UPI ID" class="w-full p-3 bg-black/60 border border-amber-500/40 rounded-xl text-sm outline-none text-white">
               <button onclick="submitWithdrawal()" class="w-full bg-amber-600 border border-amber-400 text-black font-black py-3 rounded-xl text-sm">Request Withdrawal</button>
             </div>
@@ -1640,7 +1640,7 @@ app.get('/', (req, res) => {
               <div class="h-14 px-3 bg-red-950 border-b border-amber-500/40 flex items-center justify-between">
                 <button onclick="switchView('lobby')" class="px-3 py-1 bg-red-900 border border-amber-500/40 rounded-xl text-xs font-bold text-white">Lobby</button>
                 <span class="font-black gold-text">CAREERBOOT WHEEL</span>
-                <span class="font-mono text-sm text-green-400 font-bold">â‚¹\${state.user.balance.toFixed(2)}</span>
+                <span class="font-mono text-sm text-green-400 font-bold">₹\${state.user.balance.toFixed(2)}</span>
               </div>
               <div class="flex-1 flex flex-col items-center justify-center p-4 space-y-4">
                 <div class="relative w-72 h-72 flex items-center justify-center">
@@ -1648,7 +1648,7 @@ app.get('/', (req, res) => {
                 </div>
                 \${renderBetControllerUI()}
                 <button onclick="spinCareerBootWheel()" \${cb.spinning ? 'disabled' : ''} class="w-full max-w-xs h-14 rounded-2xl font-black text-xl tracking-wider gold-gradient text-black shadow-xl active:scale-95 transition-all">
-                  \${cb.spinning ? 'SPINNING...' : 'SPIN THE WHEEL ðŸŽ¡'}
+                  \${cb.spinning ? 'SPINNING...' : 'SPIN THE WHEEL 🎡'}
                 </button>
               </div>
             </div>
@@ -1660,12 +1660,12 @@ app.get('/', (req, res) => {
               <div class="h-14 px-3 bg-red-950 border-b border-amber-500/40 flex items-center justify-between shrink-0">
                 <button onclick="state.careerboot.stage='WHEEL'; render();" class="px-3 py-1 bg-red-900 border border-amber-500/40 rounded-xl text-xs font-bold text-white">Wheel</button>
                 <span class="font-black gold-text uppercase">\${cb.selectedSlice} MASTER CLASS</span>
-                <span class="font-mono text-sm text-green-400 font-bold">â‚¹\${state.user.balance.toFixed(2)}</span>
+                <span class="font-mono text-sm text-green-400 font-bold">₹\${state.user.balance.toFixed(2)}</span>
               </div>
               <div class="flex-1 p-5 overflow-y-auto space-y-4">
                 <div class="tomato-card p-6 rounded-3xl space-y-3">
                   <div class="flex items-center gap-2">
-                    <span class="text-2xl">ðŸ“–</span>
+                    <span class="text-2xl">📖</span>
                     <h2 class="text-xl font-black text-amber-300 uppercase">\${cb.selectedSlice} Deep Detailed Chapter</h2>
                   </div>
                   \${sliceData.lesson}
@@ -1673,13 +1673,13 @@ app.get('/', (req, res) => {
               </div>
               <div class="p-4 bg-red-950 border-t border-amber-500/40 shrink-0 flex justify-center">
                 <button onclick="startCareerBootMCQs()" class="w-full max-w-xs h-14 rounded-2xl font-black text-lg gold-gradient text-black shadow-xl active:scale-95">
-                  START MCQ QUIZ ðŸš€
+                  START MCQ QUIZ 🚀
                 </button>
               </div>
             </div>
           \`;
         } else if (cb.stage === 'MCQ') {
-          const qIdx = (cb.round - 1) * 5 + cb.questionIndex;
+          const qIdx = (cb.round - 1) * 10 + cb.questionIndex;
           const qObj = cb.activeQuestions[qIdx];
           const roundMultText = cb.round === 1 ? '+1.40x' : (cb.round === 2 ? '+1.60x' : '+2.00x');
 
@@ -1691,7 +1691,7 @@ app.get('/', (req, res) => {
                 <span class="text-xs font-mono font-bold text-green-400">MULT: \${roundMultText}</span>
               </div>
               <div class="p-3 bg-black/40 border-b border-amber-500/20 flex justify-between items-center shrink-0">
-                <span class="text-xs text-amber-200/70 font-semibold">Question \${cb.questionIndex + 1} of 5 (Total 15)</span>
+                <span class="text-xs text-amber-200/70 font-semibold">Question \${cb.questionIndex + 1} of 10 (Total 30)</span>
                 <span class="text-xs font-mono text-amber-300 font-bold">ACCUMULATED: \${cb.accumulatedMultiplier.toFixed(2)}x</span>
               </div>
               <div class="flex-1 p-5 flex flex-col justify-between overflow-y-auto">
@@ -1745,7 +1745,7 @@ app.get('/', (req, res) => {
             <div class="h-14 px-3 bg-[#141822] border-b border-gray-800 flex items-center justify-between shrink-0">
               <button onclick="switchView('lobby')" class="px-3 py-1 bg-red-900/80 border border-red-500/50 rounded-xl text-xs font-bold text-white">Lobby</button>
               <span class="font-black text-amber-400 text-sm tracking-wider">AVIATOR 24x7</span>
-              <span class="font-mono text-sm text-green-400 font-bold">â‚¹\${state.user.balance.toFixed(2)}</span>
+              <span class="font-mono text-sm text-green-400 font-bold">₹\${state.user.balance.toFixed(2)}</span>
             </div>
             <div class="h-10 px-2 bg-black/60 border-b border-gray-800/80 flex items-center gap-1.5 overflow-x-auto shrink-0 no-scrollbar">
               \${state.aviator.history.slice(0, 20).map(h => \`<span class="px-2.5 py-0.5 text-[11px] font-mono font-bold rounded-full bg-gray-800 text-purple-300 border border-purple-500/30 shrink-0">\${h}x</span>\`).join('')}
@@ -1760,7 +1760,7 @@ app.get('/', (req, res) => {
             <div class="p-4 bg-[#141822] border-t border-gray-800 shrink-0 space-y-3 flex flex-col items-center">
               \${renderBetControllerUI()}
               <button id="aviator-btn" onclick="handleAviatorAction()" class="w-full max-w-xs h-14 rounded-2xl font-black text-xl tracking-wider bg-red-600 text-white shadow-lg">
-                BET â‚¹\${state.userBet}
+                BET ₹\${state.userBet}
               </button>
             </div>
           </div>
@@ -1788,7 +1788,7 @@ app.get('/', (req, res) => {
             <div class="h-14 px-3 bg-red-950 border-b border-amber-500/40 flex items-center justify-between">
               <button onclick="switchView('lobby')" class="px-3 py-1 bg-red-900 border border-amber-500/40 rounded-xl text-xs font-bold text-white">Lobby</button>
               <span class="font-black gold-text">GUESS CORRECT</span>
-              <span class="font-mono text-sm text-green-400 font-bold">â‚¹\${state.user.balance.toFixed(2)}</span>
+              <span class="font-mono text-sm text-green-400 font-bold">₹\${state.user.balance.toFixed(2)}</span>
             </div>
             <div class="flex-1 flex flex-col items-center justify-center p-6 space-y-6">
               <div class="tomato-card p-6 rounded-3xl w-full max-w-xs text-center space-y-3">
@@ -1820,7 +1820,7 @@ app.get('/', (req, res) => {
             <div class="h-14 px-3 bg-red-950 border-b border-amber-500/40 flex items-center justify-between">
               <button onclick="switchView('lobby')" class="px-3 py-1 bg-red-900/80 border border-amber-500/40 rounded-xl text-xs font-bold text-white">Lobby</button>
               <span class="font-black gold-text tracking-wider">PREDICTION PRO</span>
-              <span class="font-mono text-sm text-green-400 font-bold">â‚¹\${state.user.balance.toFixed(2)}</span>
+              <span class="font-mono text-sm text-green-400 font-bold">₹\${state.user.balance.toFixed(2)}</span>
             </div>
             <div class="flex-1 flex flex-col items-center justify-between p-3 space-y-3">
               <div class="w-full flex-1 bg-gradient-to-b from-[#090d16] to-[#04060a] border-2 border-emerald-500/30 rounded-3xl relative overflow-hidden flex flex-col p-2 min-h-[280px] shadow-[0_0_20px_rgba(16,185,129,0.15)]">
@@ -1829,7 +1829,7 @@ app.get('/', (req, res) => {
                   <div class="flex items-center gap-2 bg-black/80 backdrop-blur-md px-3 py-1.5 rounded-2xl border border-emerald-500/40 shadow-lg">
                     <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></span>
                     <span class="text-xs font-bold text-emerald-400 uppercase tracking-widest">LIVE</span>
-                    <span class="text-sm font-mono font-black text-white ml-1">â‚¹\${state.marketHistory[state.marketHistory.length - 1]}</span>
+                    <span class="text-sm font-mono font-black text-white ml-1">₹\${state.marketHistory[state.marketHistory.length - 1]}</span>
                   </div>
                   \${state.predictionTimer > 0 ? \`
                     <div class="text-xs font-mono font-black text-amber-300 bg-amber-950/90 backdrop-blur-md px-3 py-1.5 rounded-2xl border border-amber-500/60 animate-pulse shadow-lg">
@@ -1842,11 +1842,11 @@ app.get('/', (req, res) => {
               <div class="grid grid-cols-2 gap-4 w-full max-w-xs shrink-0">
                 <button onclick="playPrediction('up')" class="bg-gradient-to-b from-emerald-500 to-emerald-700 border-2 border-emerald-400 h-14 rounded-2xl font-black text-lg active:scale-95 text-white shadow-[0_0_15px_rgba(16,185,129,0.4)] flex items-center justify-center gap-2">
                   <span>UP</span>
-                  <span class="text-xl">ðŸ“ˆ</span>
+                  <span class="text-xl">📈</span>
                 </button>
                 <button onclick="playPrediction('down')" class="bg-gradient-to-b from-red-600 to-red-800 border-2 border-red-400 h-14 rounded-2xl font-black text-lg active:scale-95 text-white shadow-[0_0_15px_rgba(239,68,68,0.4)] flex items-center justify-center gap-2">
                   <span>DOWN</span>
-                  <span class="text-xl">ðŸ“‰</span>
+                  <span class="text-xl">📉</span>
                 </button>
               </div>
             </div>
@@ -1885,7 +1885,7 @@ app.get('/', (req, res) => {
                   \${state.adminTxns.map(t => \`
                     <div class="bg-black/60 p-3 rounded-xl border border-amber-500/30 text-xs space-y-2">
                       <div class="flex justify-between font-bold">
-                        <span class="text-amber-300 uppercase">\${t.type} - â‚¹\${t.amount}</span>
+                        <span class="text-amber-300 uppercase">\${t.type} - ₹\${t.amount}</span>
                         <span class="\${t.status==='approved'?'text-green-400':t.status==='rejected'?'text-red-400':'text-amber-400'} font-bold uppercase">\${t.status}</span>
                       </div>
                       <div class="text-[11px] text-gray-300">User: <span class="text-white font-bold">\${t.username}</span></div>
@@ -1912,13 +1912,13 @@ app.get('/', (req, res) => {
                   \${state.adminUsers.map(u => \`
                     <div class="bg-black/60 p-3 rounded-xl border border-amber-500/30 text-xs space-y-1">
                       <div class="flex justify-between font-bold text-amber-300">
-                        <span>ðŸ‘¤ \${u.username}</span>
-                        <span class="text-green-400 font-mono">â‚¹\${u.balance.toFixed(2)}</span>
+                        <span>👤 \${u.username}</span>
+                        <span class="text-green-400 font-mono">₹\${u.balance.toFixed(2)}</span>
                       </div>
                       <div class="grid grid-cols-3 gap-1 text-[10px] text-gray-400 font-mono mt-1">
-                        <div>Won: <span class="text-green-400">â‚¹\${u.totalWon}</span></div>
-                        <div>Lost: <span class="text-red-400">â‚¹\${u.totalLost}</span></div>
-                        <div>Placed: <span class="text-amber-200">â‚¹\${u.totalBetPlaced}</span></div>
+                        <div>Won: <span class="text-green-400">₹\${u.totalWon}</span></div>
+                        <div>Lost: <span class="text-red-400">₹\${u.totalLost}</span></div>
+                        <div>Placed: <span class="text-amber-200">₹\${u.totalBetPlaced}</span></div>
                       </div>
                     </div>
                   \`).join('')}
@@ -1931,9 +1931,13 @@ app.get('/', (req, res) => {
 
       app.innerHTML = html + popupHtml + customBetModalHtml;
 
-      if(state.currentView === 'aviator') renderAviatorOverlay();
-      if(state.currentView === 'prediction') renderPredictionGraph();
-      if(state.currentView === 'careerboot' && state.careerboot.stage === 'WHEEL') renderCareerBootWheelCanvas();
+      if (state.currentView === 'careerboot' && state.careerboot.stage === 'WHEEL') {
+        setTimeout(renderCareerBootWheelCanvas, 20);
+      } else if (state.currentView === 'prediction') {
+        setTimeout(renderPredictionGraph, 20);
+      } else if (state.currentView === 'aviator') {
+        setTimeout(renderAviatorOverlay, 20);
+      }
     }
 
     async function createPlayer() {
@@ -1943,8 +1947,13 @@ app.get('/', (req, res) => {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password })
       });
-      if (res.ok) { fetchAdminData(); showPopup('User Created Successfully', 'OK'); }
-      else showPopup('Error Creating User', 'try again');
+      if (res.ok) {
+        fetchAdminData();
+        showPopup('User Created Successfully!', 'OK');
+      } else {
+        const data = await res.json();
+        showPopup(data.error || 'Failed', 'OK');
+      }
     }
 
     async function modifyBalance() {
@@ -1954,8 +1963,12 @@ app.get('/', (req, res) => {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, amount })
       });
-      if (res.ok) { fetchAdminData(); showPopup('Balance Updated!', 'OK'); }
-      else showPopup('User Not Found', 'try again');
+      if (res.ok) {
+        fetchAdminData();
+        showPopup('Balance Updated!', 'OK');
+      } else {
+        showPopup('User Not Found', 'OK');
+      }
     }
 
     render();
