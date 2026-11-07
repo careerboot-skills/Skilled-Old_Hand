@@ -16,97 +16,59 @@ const wss = new WebSocket.Server({ server });
 // MONGOOSE SCHEMAS & MODELS
 // ==========================================
 const userSchema = new mongoose.Schema({
-  username: { type: String, required: true, unique: true },
+  mobile: { type: String, required: true, unique: true },
+  name: { type: String, required: true },
   password: { type: String, required: true },
   role: { type: String, enum: ['admin', 'player'], default: 'player' },
   balance: { type: Number, default: 0 },
   totalWon: { type: Number, default: 0 },
   totalLost: { type: Number, default: 0 },
-  totalBetPlaced: { type: Number, default: 0 },
-  seenQuestions: { type: [String], default: [] },
-  cbSequenceTracker: { type: Map, of: Number, default: {} }, // Tracks user sequence step per subject
   createdAt: { type: Date, default: Date.now }
 });
 const User = mongoose.model('User', userSchema);
 
 const transactionSchema = new mongoose.Schema({
-  username: { type: String, required: true },
+  mobile: { type: String, required: true },
+  name: String,
   type: { type: String, enum: ['deposit', 'withdrawal'], required: true },
   amount: { type: Number, required: true },
-  upiId: { type: String, default: '' },
-  txnId: { type: String, default: '' },
+  details: { type: String, default: '' },
   status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
   timestamp: { type: Date, default: Date.now }
 });
 const Transaction = mongoose.model('Transaction', transactionSchema);
 
-const historySchema = new mongoose.Schema({
-  game: String,
-  multiplier: Number,
-  timestamp: { type: Date, default: Date.now }
-});
-const GameHistory = mongoose.model('GameHistory', historySchema);
-
 // ==========================================
-// GLOBAL BET TRACKERS & PROBABILITY ENGINES
+// GAME RIGGING & PROBABILITY LOGIC
 // ==========================================
-let activeAviatorBetsCount = 0;
-let predictionBets = { up: 0, down: 0 };
-let marketHistory24x7 = [120, 125, 122, 130, 128, 135, 140, 138, 145, 150];
+let activeAviatorBets = 0;
 
-// Aviator Multiplier Engine (Fixed Non-Repeating Crash Logic)
-function getAviatorMultiplier(hasActiveBets) {
-  let val = 1.00;
-  if (hasActiveBets) {
-    // Jab bet laga hua ho to 1.05 se 1.25 tak crash ho jaye with random jitter
-    val = 1.01 + Math.random() * 0.24;
-  } else {
-    // Jab koi bet na laga ho tab organic high multiplier generate kare
-    const rand = Math.random() * 100;
-    if (rand < 20) val = 5.00 + Math.random() * 10.00;
-    else if (rand < 60) val = 15.00 + Math.random() * 35.00;
-    else if (rand < 90) val = 50.00 + Math.random() * 100.00;
-    else val = 150.00 + Math.random() * 300.00;
+function getAviatorMultiplier(hasBet) {
+  if (hasBet) {
+    // Crash between 1.00x and 1.43x when bet is placed
+    return +(1.00 + Math.random() * 0.43).toFixed(2);
   }
-  // Add micro-jitter to completely prevent same crash number sequence repeats
-  val += (Math.random() * 0.08);
-  return +val.toFixed(2);
-}
-
-function getGenericRewardMultiplier() {
   const rand = Math.random() * 100;
-  if (rand < 70) return 1.2;
-  if (rand < 90) return 1.5;
-  if (rand < 98) return 2.0;
-  return 3.0;
+  if (rand < 20) return +(5.00 + Math.random() * 10.00).toFixed(2);
+  if (rand < 60) return +(15.00 + Math.random() * 35.00).toFixed(2);
+  if (rand < 90) return +(50.00 + Math.random() * 100.00).toFixed(2);
+  return +(150.00 + Math.random() * 300.00).toFixed(2);
 }
 
-// 24x7 PREDICTION GRAPH ENGINE TICKER
-setInterval(() => {
-  const currentVal = marketHistory24x7[marketHistory24x7.length - 1];
-  let delta = 0;
-
-  if (predictionBets.up > 0 || predictionBets.down > 0) {
-    if (predictionBets.up >= predictionBets.down) {
-      delta = -Math.floor(Math.random() * 5 + 2); // Force down
-    } else {
-      delta = Math.floor(Math.random() * 5 + 2);  // Force up
-    }
-  } else {
-    delta = Math.floor(Math.random() * 11) - 5;
-  }
-
-  let nextVal = Math.max(30, Math.min(300, currentVal + delta));
-  marketHistory24x7.push(nextVal);
-  if (marketHistory24x7.length > 30) marketHistory24x7.shift();
-
-  broadcast({ type: 'PREDICTION_TICK', marketHistory: marketHistory24x7 });
-}, 1000);
+function getColorGuessResult() {
+  const rand = Math.random() * 100;
+  if (rand < 15) return 'Red';       // 15%
+  if (rand < 30) return 'White';     // 15%
+  if (rand < 50) return 'Green';     // 20%
+  if (rand < 70) return 'Black';     // 20%
+  if (rand < 85) return 'Yellow';    // 15%
+  return 'Blue';                     // 20%
+}
 
 // ==========================================
-// 24x7 AVIATOR ENGINE (WebSocket & Non-blocking)
+// AVIATOR WEBSOCKET ENGINE
 // ==========================================
-let aviatorState = { status: 'WAITING', currentX: 1.00, crashX: 1.00, history: [] };
+let aviatorState = { status: 'WAITING', currentX: 1.00, crashX: 1.00 };
 
 function broadcast(data) {
   wss.clients.forEach(client => {
@@ -114,358 +76,196 @@ function broadcast(data) {
   });
 }
 
-async function initAviatorHistory() {
-  try {
-    const docs = await GameHistory.find({ game: 'aviator' }).sort({ timestamp: -1 }).limit(20);
-    aviatorState.history = docs.map(d => d.multiplier);
-  } catch (err) {
-    console.error("History fetch error:", err.message);
-  }
-}
-
-function runAviatorCycle() {
+function runAviatorLoop() {
   aviatorState.status = 'WAITING';
   aviatorState.currentX = 1.00;
   broadcast({ type: 'AVIATOR_STATE', ...aviatorState });
 
-  // 5 Second Waiting Phase
   setTimeout(() => {
-    const hasActiveBets = activeAviatorBetsCount > 0;
-    aviatorState.crashX = getAviatorMultiplier(hasActiveBets);
+    const hasBet = activeAviatorBets > 0;
+    aviatorState.crashX = getAviatorMultiplier(hasBet);
     aviatorState.status = 'FLYING';
-    
-    let startTime = Date.now();
 
-    const flyInterval = setInterval(async () => {
+    let startTime = Date.now();
+    const interval = setInterval(() => {
       let elapsed = (Date.now() - startTime) / 1000;
       let nextX = +(Math.pow(1.06, elapsed * 2.2)).toFixed(2);
 
       if (nextX >= aviatorState.crashX) {
-        clearInterval(flyInterval);
+        clearInterval(interval);
         aviatorState.currentX = aviatorState.crashX;
         aviatorState.status = 'CRASHED';
-
-        // Reset bet tracker for next round
-        activeAviatorBetsCount = 0;
-
-        try { 
-          await GameHistory.create({ game: 'aviator', multiplier: aviatorState.crashX }); 
-        } catch (e) {
-          console.error("GameHistory save error:", e.message);
-        }
-
-        aviatorState.history.unshift(aviatorState.crashX);
-        if (aviatorState.history.length > 20) aviatorState.history.pop();
-
+        activeAviatorBets = 0;
         broadcast({ type: 'AVIATOR_STATE', ...aviatorState });
-
-        // Wait 2.5s on crashed state, then restart loop cleanly
-        setTimeout(runAviatorCycle, 2500);
+        setTimeout(runAviatorLoop, 2500);
       } else {
         aviatorState.currentX = nextX;
         broadcast({ type: 'AVIATOR_STATE', ...aviatorState });
       }
     }, 100);
-
-  }, 5000);
+  }, 4000);
 }
-
-// Start Aviator Game Engine cleanly
-initAviatorHistory().then(() => runAviatorCycle());
+runAviatorLoop();
 
 // ==========================================
-// HTTP APIs & AUTH
+// HTTP APIS
 // ==========================================
-app.post('/api/signup', async (req, res) => {
-  const { username, password } = req.body;
-  if (!username || !password) return res.status(400).json({ error: 'All fields required' });
+app.post('/api/register', async (req, res) => {
+  const { name, mobile, password } = req.body;
+  if (!name || !mobile || !password) return res.status(400).json({ error: 'All fields required' });
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
-    const user = await User.create({ username, password: hashedPassword });
-    res.json({ success: true, username: user.username, role: user.role, balance: user.balance });
+    const user = await User.create({ name, mobile, password: hashedPassword });
+    res.json({ success: true, user: { name: user.name, mobile: user.mobile, balance: user.balance, role: user.role } });
   } catch (err) {
-    res.status(400).json({ error: 'Username already exists' });
+    res.status(400).json({ error: 'Mobile number already registered' });
   }
 });
 
 app.post('/api/login', async (req, res) => {
-  const { username, password } = req.body;
-  const user = await User.findOne({ username });
+  const { mobile, password } = req.body;
+  const user = await User.findOne({ mobile });
   if (!user || !(await bcrypt.compare(password, user.password))) {
-    return res.status(401).json({ error: 'Invalid credentials' });
+    return res.status(401).json({ error: 'Invalid Mobile or Password' });
   }
-  res.json({ username: user.username, role: user.role, balance: user.balance, seenQuestions: user.seenQuestions || [] });
+  res.json({ success: true, user: { name: user.name, mobile: user.mobile, balance: user.balance, role: user.role } });
 });
 
-app.post('/api/change-password', async (req, res) => {
-  const { username, oldPassword, newPassword } = req.body;
-  const user = await User.findOne({ username });
-  if (!user || !(await bcrypt.compare(oldPassword, user.password))) {
-    return res.status(400).json({ error: 'Old Password Incorrect!' });
-  }
+app.post('/api/forgot-password', async (req, res) => {
+  const { mobile, newPassword } = req.body;
+  const user = await User.findOne({ mobile });
+  if (!user) return res.status(404).json({ error: 'Mobile number not found' });
   user.password = await bcrypt.hash(newPassword, 10);
   await user.save();
-  res.json({ success: true, message: 'Password Updated Successfully!' });
+  res.json({ success: true, message: 'Password reset successfully!' });
 });
 
-// AVIATOR BET DEDUCTION & WIN/LOSS APIS
-app.post('/api/aviator/bet', async (req, res) => {
-  const { username, betAmount } = req.body;
+app.post('/api/play-game', async (req, res) => {
+  const { mobile, game, betAmount, choice } = req.body;
   const numBet = parseFloat(betAmount);
   if (isNaN(numBet) || numBet <= 0) return res.status(400).json({ error: 'Invalid Bet Amount' });
 
   const user = await User.findOneAndUpdate(
-    { username, balance: { $gte: numBet } },
-    { $inc: { balance: -numBet, totalBetPlaced: numBet } },
+    { mobile, balance: { $gte: numBet } },
+    { $inc: { balance: -numBet } },
     { new: true }
   );
-
   if (!user) return res.status(400).json({ error: 'Insufficient Balance' });
 
-  activeAviatorBetsCount++;
+  let won = false;
+  let multiplier = 0;
+  let resultMeta = {};
 
-  res.json({ success: true, newBalance: user.balance });
-});
-
-app.post('/api/aviator/cashout', async (req, res) => {
-  const { username, betAmount, multiplier } = req.body;
-  const numBet = parseFloat(betAmount);
-  const numMult = parseFloat(multiplier);
-  if (isNaN(numBet) || isNaN(numMult) || numBet <= 0 || numMult < 1) {
-    return res.status(400).json({ error: 'Invalid Parameters' });
+  if (game === 'bigsmall') {
+    const isBigChoice = String(choice).toLowerCase() === 'big';
+    const sum = isBigChoice ? 5 : 9; 
+    won = false;
+    multiplier = 0;
+    resultMeta = { sum, result: isBigChoice ? 'SMALL' : 'BIG' };
+  } 
+  else if (game === 'colourguess') {
+    const outcomeColor = getColorGuessResult();
+    won = String(choice).toLowerCase() === outcomeColor.toLowerCase();
+    multiplier = won ? 3.5 : 0;
+    resultMeta = { color: outcomeColor };
+  } 
+  else if (game === 'candycrash') {
+    won = Math.random() < 0.05; 
+    multiplier = won ? 1.5 : 0;
+  } 
+  else if (game === 'chickenroad') {
+    const targetPoint = parseFloat(choice.targetPoint) || 1.5;
+    won = targetPoint < 2.0; 
+    multiplier = won ? targetPoint : 0;
+  } 
+  else {
+    // Universal mechanics for remaining 45+ games
+    won = Math.random() < 0.25;
+    multiplier = won ? 2.0 : 0;
+    resultMeta = { message: won ? 'Victory!' : 'Defeat' };
   }
 
-  const winAmount = +(numBet * numMult).toFixed(2);
-  const user = await User.findOneAndUpdate(
-    { username },
-    { $inc: { balance: winAmount, totalWon: winAmount } },
+  const winPayout = won ? +(numBet * multiplier).toFixed(2) : 0;
+  const updatedUser = await User.findOneAndUpdate(
+    { mobile },
+    { $inc: { balance: winPayout, totalWon: winPayout, totalLost: won ? 0 : numBet } },
     { new: true }
   );
 
+  res.json({ won, multiplier, newBalance: updatedUser.balance, resultMeta });
+});
+
+app.post('/api/aviator/register-bet', (req, res) => {
+  activeAviatorBets++;
+  res.json({ success: true });
+});
+
+app.post('/api/deposit-request', async (req, res) => {
+  const { mobile, amount, utr } = req.body;
+  const user = await User.findOne({ mobile });
   if (!user) return res.status(404).json({ error: 'User not found' });
-  res.json({ success: true, newBalance: user.balance, winAmount });
+  await Transaction.create({ mobile, name: user.name, type: 'deposit', amount, details: utr || 'UPI Payment' });
+  res.json({ success: true, message: 'Deposit request sent to Admin!' });
 });
 
-app.post('/api/aviator/loss', async (req, res) => {
-  const { username, betAmount } = req.body;
-  const numBet = parseFloat(betAmount);
-  if (isNaN(numBet) || numBet <= 0) return res.status(400).json({ error: 'Invalid Details' });
-
-  const user = await User.findOneAndUpdate(
-    { username },
-    { $inc: { totalLost: numBet } },
-    { new: true }
-  );
-
-  if (!user) return res.status(404).json({ error: 'User not found' });
-  res.json({ success: true, newBalance: user.balance });
-});
-
-// ==========================================
-// DEPOSIT & WITHDRAWAL APIS
-// ==========================================
-app.post('/api/deposit', async (req, res) => {
-  const { username, amount, txnId } = req.body;
+app.post('/api/withdraw-request', async (req, res) => {
+  const { mobile, amount, bankDetails } = req.body;
   const numAmt = parseFloat(amount);
-  if (isNaN(numAmt) || numAmt <= 0 || !txnId) return res.status(400).json({ error: 'Invalid details provided' });
-
-  await Transaction.create({ username, type: 'deposit', amount: numAmt, txnId });
-  res.json({ success: true, message: 'Deposit request submitted successfully! Awaiting Admin approval.' });
-});
-
-app.post('/api/withdraw', async (req, res) => {
-  const { username, amount, upiId } = req.body;
-  const numAmt = parseFloat(amount);
-  if (isNaN(numAmt) || numAmt <= 0 || !upiId) return res.status(400).json({ error: 'Invalid details provided' });
-
   const user = await User.findOneAndUpdate(
-    { username, balance: { $gte: numAmt } },
+    { mobile, balance: { $gte: numAmt } },
     { $inc: { balance: -numAmt } },
     { new: true }
   );
-
   if (!user) return res.status(400).json({ error: 'Insufficient Balance' });
-
-  await Transaction.create({ username, type: 'withdrawal', amount: numAmt, upiId });
-  res.json({ success: true, newBalance: user.balance, message: 'Withdrawal request submitted!' });
+  await Transaction.create({ mobile, name: user.name, type: 'withdrawal', amount: numAmt, details: bankDetails });
+  res.json({ success: true, newBalance: user.balance, message: 'Withdrawal request sent to Admin!' });
 });
 
-// ==========================================
-// ADMIN CONTROL ENDPOINTS
-// ==========================================
-app.post('/api/admin/create-user', async (req, res) => {
-  const { username, password } = req.body;
-  try {
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const user = await User.create({ username, password: hashedPassword });
-    res.json(user);
-  } catch (err) {
-    res.status(400).json({ error: 'Username already exists' });
-  }
-});
-
-app.get('/api/admin/users', async (req, res) => {
-  const users = await User.find({ role: 'player' }).sort({ createdAt: -1 });
-  res.json(users);
-});
-
-app.get('/api/admin/transactions', async (req, res) => {
-  const txns = await Transaction.find().sort({ timestamp: -1 });
+// Admin APIs
+app.get('/api/admin/pending-txns', async (req, res) => {
+  const txns = await Transaction.find({ status: 'pending' }).sort({ timestamp: -1 });
   res.json(txns);
 });
 
-app.post('/api/admin/process-transaction', async (req, res) => {
+app.post('/api/admin/update-balance', async (req, res) => {
+  const { mobile, amount } = req.body;
+  const numAmt = parseFloat(amount);
+  const user = await User.findOneAndUpdate(
+    { mobile },
+    { $inc: { balance: numAmt } },
+    { new: true }
+  );
+  if (!user) return res.status(404).json({ error: 'Player Mobile not found' });
+  res.json({ success: true, newBalance: user.balance, name: user.name });
+});
+
+app.post('/api/admin/process-txn', async (req, res) => {
   const { txnId, action } = req.body;
   const txn = await Transaction.findById(txnId);
   if (!txn || txn.status !== 'pending') return res.status(400).json({ error: 'Transaction unavailable' });
 
-  if (action === 'approve') {
-    txn.status = 'approved';
-    if (txn.type === 'deposit') {
-      await User.findOneAndUpdate({ username: txn.username }, { $inc: { balance: txn.amount } });
-    }
-  } else if (action === 'reject') {
-    txn.status = 'rejected';
-    if (txn.type === 'withdrawal') {
-      await User.findOneAndUpdate({ username: txn.username }, { $inc: { balance: txn.amount } });
-    }
+  txn.status = action === 'approve' ? 'approved' : 'rejected';
+  if (action === 'approve' && txn.type === 'deposit') {
+    await User.findOneAndUpdate({ mobile: txn.mobile }, { $inc: { balance: txn.amount } });
+  } else if (action === 'reject' && txn.type === 'withdrawal') {
+    await User.findOneAndUpdate({ mobile: txn.mobile }, { $inc: { balance: txn.amount } });
   }
   await txn.save();
   res.json({ success: true });
 });
 
-app.post('/api/admin/update-balance', async (req, res) => {
-  const { username, amount } = req.body;
-  const user = await User.findOneAndUpdate(
-    { username },
-    { $inc: { balance: amount } },
-    { new: true }
-  );
-  if (user) return res.json({ success: true, newBalance: user.balance });
-  res.status(404).json({ error: 'User not found' });
-});
-
-// Sequence step get/update for CareerBoot (1-10 -> 11-20 -> 1-10...)
-app.post('/api/careerboot/next-sequence', async (req, res) => {
-  const { username, subject } = req.body;
-  const user = await User.findOne({ username });
-  if (!user) return res.status(404).json({ error: 'User not found' });
-
-  let currentStep = user.cbSequenceTracker ? (user.cbSequenceTracker.get(subject) || 0) : 0;
-  
-  let nextStep = (currentStep + 1) % 2;
-  if (!user.cbSequenceTracker) user.cbSequenceTracker = new Map();
-  user.cbSequenceTracker.set(subject, nextStep);
-  await user.save();
-
-  res.json({ currentStep });
-});
-
-// PREDICTION REGISTER BET API
-app.post('/api/prediction/place-bet', async (req, res) => {
-  const { direction, amount } = req.body;
-  const num = parseFloat(amount) || 0;
-  if (direction === 'up') predictionBets.up += num;
-  if (direction === 'down') predictionBets.down += num;
-  res.json({ success: true, bets: predictionBets });
-});
-
-// INSTANT PLAY GAMES ENGINE
-app.post('/api/play-instant', async (req, res) => {
-  const { username, game, betAmount, choice } = req.body;
-  const numBet = parseFloat(betAmount);
-  if (isNaN(numBet) || numBet <= 0) return res.status(400).json({ error: 'Invalid Bet Amount' });
-
-  const initialUser = await User.findOneAndUpdate(
-    { username, balance: { $gte: numBet } },
-    { $inc: { balance: -numBet, totalBetPlaced: numBet } },
-    { new: true }
-  );
-
-  if (!initialUser) return res.status(400).json({ error: 'Insufficient Balance' });
-
-  let won = false;
-  let rewardMultiplier = 0;
-  let resultMeta = {};
-
-  if (game === 'dice') {
-    let d1, d2, sum;
-    if (choice === 'big') {
-      do {
-        d1 = Math.floor(Math.random() * 6) + 1;
-        d2 = Math.floor(Math.random() * 6) + 1;
-        sum = d1 + d2;
-      } while (sum > 6);
-    } else {
-      do {
-        d1 = Math.floor(Math.random() * 6) + 1;
-        d2 = Math.floor(Math.random() * 6) + 1;
-        sum = d1 + d2;
-      } while (sum <= 6);
-    }
-    
-    const isSmall = sum >= 2 && sum <= 6;
-    if ((isSmall && choice === 'small') || (!isSmall && choice === 'big')) {
-      won = true;
-      rewardMultiplier = getGenericRewardMultiplier();
-    }
-    resultMeta = { dice1: d1, dice2: d2, sum };
-
-  } else if (game === 'prediction') {
-    const startVal = choice.startVal;
-    const endVal = choice.endVal;
-    const dir = choice.direction;
-
-    won = (dir === 'up' && endVal > startVal) || (dir === 'down' && endVal < startVal);
-    rewardMultiplier = won ? 2 : 0;
-    resultMeta = { startVal, endVal };
-
-    predictionBets = { up: 0, down: 0 };
-
-  } else if (game === 'careerboot') {
-    won = choice.won;
-    rewardMultiplier = choice.multiplier || 0;
-    
-    if (choice.askedQuestionIds && Array.isArray(choice.askedQuestionIds)) {
-      await User.findOneAndUpdate(
-        { username },
-        { $addToSet: { seenQuestions: { $each: choice.askedQuestionIds } } }
-      );
-    }
-  }
-
-  const winPayout = won ? (numBet * rewardMultiplier) : 0;
-  let finalUser;
-
-  if (winPayout > 0) {
-    finalUser = await User.findOneAndUpdate(
-      { username },
-      { $inc: { balance: winPayout, totalWon: winPayout } },
-      { new: true }
-    );
-  } else {
-    finalUser = await User.findOneAndUpdate(
-      { username },
-      { $inc: { totalLost: numBet } },
-      { new: true }
-    );
-  }
-
-  res.json({ won, rewardMultiplier, newBalance: finalUser.balance, seenQuestions: finalUser.seenQuestions, resultMeta });
-});
-
 // ==========================================
-// EMBEDDED FRONTEND ENGINE
+// EMBEDDED FRONTEND (50+ GAMES SUITE)
 // ==========================================
 app.get('/', (req, res) => {
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.send(`
 <!DOCTYPE html>
-<html lang="hi">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Skilled Old Hand 🤑</title>
+  <title>K³ (Kismat Ka Khel)</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     * { box-sizing: border-box; touch-action: manipulation; }
@@ -475,1528 +275,448 @@ app.get('/', (req, res) => {
     .tomato-card { background: linear-gradient(145deg, #800a0a, #360303); border: 2px solid #d4af37; box-shadow: 0 10px 25px rgba(0,0,0,0.8); }
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-
-    @keyframes popIn {
-      0% { transform: scale(0.6); opacity: 0; }
-      80% { transform: scale(1.05); opacity: 1; }
-      100% { transform: scale(1); opacity: 1; }
-    }
-    .popup-anim { animation: popIn 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
-
-    @keyframes expandPage {
-      0% { transform: scale(0.1) rotate(-15deg); opacity: 0; }
-      100% { transform: scale(1) rotate(0deg); opacity: 1; }
-    }
-    .animate-expand { animation: expandPage 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
   </style>
 </head>
 <body class="h-full w-full flex items-center justify-center p-0 md:p-4">
-
   <div id="app" class="w-full h-full max-w-md max-h-[920px] bg-[#120303] md:rounded-3xl border-0 md:border-2 border-[#d4af37]/40 shadow-2xl flex flex-col relative overflow-hidden"></div>
 
   <script>
-    class SoundEngine {
-      constructor() { this.ctx = null; }
-      init() { if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)(); }
-      stopAll() {
-        if (this.ctx && this.ctx.state !== 'closed') {
-          this.ctx.close();
-          this.ctx = null;
-        }
-      }
-      playFly() {
-        if (state.currentView !== 'aviator') return;
-        this.init();
-        let osc = this.ctx.createOscillator(); let g = this.ctx.createGain();
-        osc.frequency.setValueAtTime(140, this.ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(300, this.ctx.currentTime + 0.1);
-        g.gain.setValueAtTime(0.02, this.ctx.currentTime);
-        osc.connect(g); g.connect(this.ctx.destination);
-        osc.start(); osc.stop(this.ctx.currentTime + 0.1);
-      }
-      playCoinFlip() {
-        if (state.currentView !== 'guesscorrect' && state.currentView !== 'careerboot') return;
-        this.init();
-        let osc = this.ctx.createOscillator(); let g = this.ctx.createGain();
-        osc.frequency.setValueAtTime(800, this.ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(200, this.ctx.currentTime + 0.08);
-        g.gain.setValueAtTime(0.04, this.ctx.currentTime);
-        osc.connect(g); g.connect(this.ctx.destination);
-        osc.start(); osc.stop(this.ctx.currentTime + 0.08);
-      }
-      playMarketBeep() {
-        if (state.currentView !== 'prediction') return;
-        this.init();
-        let osc = this.ctx.createOscillator(); let g = this.ctx.createGain();
-        osc.frequency.setValueAtTime(600, this.ctx.currentTime);
-        g.gain.setValueAtTime(0.01, this.ctx.currentTime);
-        osc.connect(g); g.connect(this.ctx.destination);
-        osc.start(); osc.stop(this.ctx.currentTime + 0.05);
-      }
-      playWin() {
-        if (['lobby', 'login', 'admin', 'pwchange', 'deposit', 'withdraw'].includes(state.currentView)) return;
-        this.init();
-        let osc = this.ctx.createOscillator(); let g = this.ctx.createGain();
-        osc.frequency.setValueAtTime(523.25, this.ctx.currentTime);
-        osc.frequency.setValueAtTime(659.25, this.ctx.currentTime + 0.1);
-        osc.frequency.setValueAtTime(783.99, this.ctx.currentTime + 0.2);
-        g.gain.setValueAtTime(0.1, this.ctx.currentTime);
-        osc.connect(g); g.connect(this.ctx.destination);
-        osc.start(); osc.stop(this.ctx.currentTime + 0.35);
-      }
-      playLoss() {
-        if (['lobby', 'login', 'admin', 'pwchange', 'deposit', 'withdraw'].includes(state.currentView)) return;
-        this.init();
-        let osc = this.ctx.createOscillator(); osc.type = 'sawtooth'; let g = this.ctx.createGain();
-        osc.frequency.setValueAtTime(180, this.ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(40, this.ctx.currentTime + 0.3);
-        g.gain.setValueAtTime(0.1, this.ctx.currentTime);
-        osc.connect(g); g.connect(this.ctx.destination);
-        osc.start(); osc.stop(this.ctx.currentTime + 0.3);
-      }
-    }
-    const sound = new SoundEngine();
-
     let state = {
       user: null,
-      authMode: 'login',
-      currentView: 'login',
-      adminSubTab: 'users',
-      aviator: { status: 'WAITING', currentX: 1.00, history: [] },
+      view: 'login', // login, register, forgot, lobby, game, deposit, withdraw, admin
+      authTab: 'login',
+      currentGame: null,
       userBet: 100,
-      showCustomBetModal: false,
-      hasBetAviator: false,
-      nextRoundBet: false,
-      cashedOut: false,
       popup: null,
-      adminUsers: [],
+      aviator: { status: 'WAITING', currentX: 1.00 },
+      hasBetAviator: false,
       adminTxns: [],
-      diceRolling: false,
-      diceResults: [1, 1],
-      marketHistory: [120, 125, 122, 130, 128, 135, 140, 138, 145, 150],
-      predictionMark1: null,
-      predictionMark2: null,
-      predictionTimer: 0,
-      pulseRadius: 0,
-
-      careerboot: {
-        stage: 'WHEEL',
-        selectedSlice: null,
-        spinning: false,
-        wheelAngle: 0,
-        round: 1,
-        questionIndex: 0,
-        activeQuestions: [],
-        accumulatedMultiplier: 0,
-        selectedAnswer: null,
-        isAnswered: false,
-        askedQuestionIdsThisGame: []
-      }
+      adminSearchMobile: '',
+      adminPointsAmt: 100
     };
 
-    const CAREERBOOT_DATA = {
-      'Grammar': {
-        color: '#dc2626',
-        lesson: \`
-          <div class="space-y-4 text-sm text-amber-100/90 leading-relaxed text-left font-sans">
-            <h3 class="text-base font-bold text-amber-300 border-b border-amber-500/30 pb-1">Grammar Master Module</h3>
-            <p>Comprehensive English Grammar rules, sentence syntax, subjunctives, parallelism, and punctuation guidelines for executive level communications.</p>
-          </div>
-        \`,
-        mcqs: [
-          { id: "GMR_1", q: "Identify the correctly punctuated sentence.", opts: ["The manager, and supervisor agreed.", "The manager and supervisor agreed.", "The manager, and supervisor, agreed.", "The manager and supervisor, agreed."], a: 1 },
-          { id: "GMR_2", q: "Which word correctly completes: 'Neither of the applicants ___ qualified.'", opts: ["are", "is", "were", "have"], a: 1 },
-          { id: "GMR_3", q: "Choose the sentence with correct subject-verb agreement.", opts: ["Data shows great progress.", "The team are winning.", "A group of experts is presenting.", "Both is arriving today."], a: 2 },
-          { id: "GMR_4", q: "Which phrase contains a dangling modifier?", opts: ["Having finished the report, the computer crashed.", "After completing the audit, she left.", "To succeed, practice daily.", "While reviewing numbers, we saw mistakes."], a: 0 },
-          { id: "GMR_5", q: "Select the correct pronoun: 'Give the file to John and ___.'", opts: ["I", "me", "myself", "mine"], a: 1 },
-          { id: "GMR_6", q: "Choose the sentence showing possessive usage.", opts: ["It's a great opportunity.", "The bird lost its feather.", "Its going to rain today.", "They're house is big."], a: 1 },
-          { id: "GMR_7", q: "Which sentence demonstrates proper parallel structure?", opts: ["He likes reading, writing, and to edit.", "He likes reading, writing, and editing.", "He likes to read, writing, and edit.", "He likes read, write, and editing."], a: 1 },
-          { id: "GMR_8", q: "Identify the sentence written in Active Voice.", opts: ["The report was finalized by the committee.", "The committee finalized the report.", "A decision was made by management.", "The project was approved."], a: 1 },
-          { id: "GMR_9", q: "Complete the subjunctive sentence: 'If I ___ the CEO, I would expand operations.'", opts: ["was", "were", "am", "be"], a: 1 },
-          { id: "GMR_10", q: "Choose the correct word: 'The new policy will ___ all employees.'", opts: ["effect", "affect", "effective", "affects"], a: 1 },
-          { id: "GMR_11", q: "Choose the sentence with correct capitalization.", opts: ["We visited the grand canyon.", "We visited the Grand Canyon.", "We Visited the grand canyon.", "We visited The grand Canyon."], a: 1 },
-          { id: "GMR_12", q: "Identify the relative pronoun in: 'The developer who built this app won.'", opts: ["developer", "built", "who", "won"], a: 2 },
-          { id: "GMR_13", q: "Which word is a conjunction?", opts: ["Quickly", "And", "Under", "She"], a: 1 },
-          { id: "GMR_14", q: "Select the correctly formatted plural possessive.", opts: ["The employees' lounge", "The employee's lounge", "The employees lounge's", "The employeess lounge"], a: 0 },
-          { id: "GMR_15", q: "What type of clause is 'Although it was raining'?", opts: ["Independent clause", "Dependent clause", "Noun clause", "Verb clause"], a: 1 },
-          { id: "GMR_16", q: "Find the error: 'He plays piano good.'", opts: ["plays", "piano", "good (should be well)", "No error"], a: 2 },
-          { id: "GMR_17", q: "Choose the correct sentence.", opts: ["She don't know.", "She doesn't know.", "She not know.", "She isn't know."], a: 1 },
-          { id: "GMR_18", q: "Which tense is 'They will have finished by 5 PM'?", opts: ["Future Perfect", "Future Continuous", "Simple Future", "Present Perfect"], a: 0 },
-          { id: "GMR_19", q: "Identify the gerund in: 'Swimming is great exercise.'", opts: ["Swimming", "is", "great", "exercise"], a: 0 },
-          { id: "GMR_20", q: "Select the sentence with correct article usage.", opts: ["He is a honest man.", "He is an honest man.", "He is the honest man.", "He is honest man."], a: 1 }
-        ]
-      },
-      'Vocabulary': {
-        color: '#2563eb',
-        lesson: \`
-          <div class="space-y-4 text-sm text-amber-100/90 leading-relaxed text-left font-sans">
-            <h3 class="text-base font-bold text-amber-300 border-b border-amber-500/30 pb-1">Vocabulary Master Module</h3>
-            <p>Key terms for business strategy, financial terminology, risk mitigation, and corporate governance.</p>
-          </div>
-        \`,
-        mcqs: [
-          { id: "VOC_1", q: "What does 'Mitigate' mean?", opts: ["Increase severity", "Lessen or reduce harm", "Duplicate records", "Delay execution"], a: 1 },
-          { id: "VOC_2", q: "Choose the synonym for 'Synergy'.", opts: ["Isolation", "Combined effectiveness", "Conflict", "Division"], a: 1 },
-          { id: "VOC_3", q: "What is the meaning of 'Pivot' in business?", opts: ["Close operations", "Maintain current strategy", "Strategic change in course", "File for bankruptcy"], a: 2 },
-          { id: "VOC_4", q: "Define 'Feasible'.", opts: ["Impossible to execute", "Possible and practical", "Expensive", "Theoretical only"], a: 1 },
-          { id: "VOC_5", q: "What is a 'Paradigm'?", opts: ["A financial metric", "A standard pattern or model", "A legal complaint", "An error in calculation"], a: 1 },
-          { id: "VOC_6", q: "What is the opposite of 'Transparent'?", opts: ["Clear", "Opaque", "Lucid", "Visible"], a: 1 },
-          { id: "VOC_7", q: "What does 'Fiduciary' relate to?", opts: ["Legal & ethical financial trust", "Physical product marketing", "Software coding", "Human resources hiring"], a: 0 },
-          { id: "VOC_8", q: "What is a 'Bottleneck' in workflow?", opts: ["A point of congestion or delay", "A marketing victory", "A cash bonus", "An expansion model"], a: 0 },
-          { id: "VOC_9", q: "What does 'Pragmatic' mean?", opts: ["Theoretical", "Practical and realistic", "Emotional", "Unpredictable"], a: 1 },
-          { id: "VOC_10", q: "Define 'Discrepancy'.", opts: ["An inconsistency or difference", "An exact match", "A complete agreement", "A monthly report"], a: 0 },
-          { id: "VOC_11", q: "What does 'Benchmark' mean?", opts: ["A target score", "A standard for comparison", "A low mark", "A draft"], a: 1 },
-          { id: "VOC_12", q: "Choose the synonym for 'Ambiguous'.", opts: ["Unclear", "Definite", "Bright", "Certain"], a: 0 },
-          { id: "VOC_13", q: "What is 'Scalability'?", opts: ["Ability to handle growth", "Shrinking a business", "Fixing code bugs", "Firing employees"], a: 0 },
-          { id: "VOC_14", q: "What does 'Acumen' mean?", opts: ["Keen insight & quick decisions", "Lack of knowledge", "Mathematical error", "Slow growth"], a: 0 },
-          { id: "VOC_15", q: "Antonym of 'Lucrative'.", opts: ["Unprofitable", "Profitable", "Rewarding", "Gainful"], a: 0 },
-          { id: "VOC_16", q: "What does 'Consensus' mean?", opts: ["General agreement", "Disagreement", "Voting delay", "Unilateral choice"], a: 0 },
-          { id: "VOC_17", q: "Define 'Leverage' in strategy.", opts: ["To use to maximum advantage", "To discard", "To minimize risk", "To sell assets"], a: 0 },
-          { id: "VOC_18", q: "What is 'Churn Rate'?", opts: ["Customer loss rate", "Production rate", "Employee hiring rate", "Profit rate"], a: 0 },
-          { id: "VOC_19", q: "Synonym for 'Meticulous'.", opts: ["Extremely careful & precise", "Careless", "Quick", "Sloppy"], a: 0 },
-          { id: "VOC_20", q: "What does 'Empirical' mean?", opts: ["Based on observation/experience", "Theoretical", "Imaginary", "Unproven"], a: 0 }
-        ]
-      },
-      'MS Excel': {
-        color: '#059669',
-        lesson: \`
-          <div class="space-y-4 text-sm text-amber-100/90 leading-relaxed text-left font-sans">
-            <h3 class="text-base font-bold text-amber-300 border-b border-amber-500/30 pb-1">MS Excel Master Module</h3>
-            <p>Advanced spreadsheet operations, XLOOKUP, Pivot Tables, logical formulas, and data cleanup tools.</p>
-          </div>
-        \`,
-        mcqs: [
-          { id: "EXC_1", q: "Which formula searches for a value in the leftmost column of a table?", opts: ["XLOOKUP", "VLOOKUP", "HLOOKUP", "INDEX"], a: 1 },
-          { id: "EXC_2", q: "What symbol freezes cell references in Excel (Absolute Reference)?", opts: ["#", "$", "%", "&"], a: 1 },
-          { id: "EXC_3", q: "Which feature rapidly summarizes large sets of operational data?", opts: ["Data Validation", "Pivot Table", "Conditional Formatting", "Goal Seek"], a: 1 },
-          { id: "EXC_4", q: "What does #N/A mean in Excel?", opts: ["Value not available", "Number overflow", "Column width small", "Division by zero"], a: 0 },
-          { id: "EXC_5", q: "Which function removes trailing and leading extra spaces from text?", opts: ["CLEAN()", "TRIM()", "REMOVE()", "UPPER()"], a: 1 },
-          { id: "EXC_6", q: "What is the shortcut key to Undo an action in Excel?", opts: ["Ctrl + Y", "Ctrl + Z", "Ctrl + X", "Ctrl + U"], a: 1 },
-          { id: "EXC_7", q: "Which function counts cells that meet a single specific condition?", opts: ["COUNT", "COUNTA", "COUNTIF", "SUMIF"], a: 2 },
-          { id: "EXC_8", q: "What does #DIV/0! error indicate?", opts: ["Reference invalid", "Divided by zero", "Formula name error", "Value missing"], a: 1 },
-          { id: "EXC_9", q: "Which key toggles absolute and relative cell referencing when editing a formula?", opts: ["F2", "F4", "F8", "F11"], a: 1 },
-          { id: "EXC_10", q: "Which modern function replaces VLOOKUP without left-side limitations?", opts: ["LOOKUP", "MATCH", "XLOOKUP", "SEARCH"], a: 2 },
-          { id: "EXC_11", q: "Shortcut to select the entire column in Excel?", opts: ["Ctrl + Space", "Shift + Space", "Alt + Space", "Ctrl + A"], a: 0 },
-          { id: "EXC_12", q: "Which function calculates average based on multiple criteria?", opts: ["AVERAGEIF", "AVERAGEIFS", "SUMIFS", "COUNTIFS"], a: 1 },
-          { id: "EXC_13", q: "What does =CONCATENATE() do?", opts: ["Joins text strings", "Splits text", "Counts text", "Deletes text"], a: 0 },
-          { id: "EXC_14", q: "Shortcut to insert a new chart in Excel?", opts: ["F11", "F2", "F5", "F9"], a: 0 },
-          { id: "EXC_15", q: "Which function converts text to uppercase?", opts: ["UPPER()", "LOWER()", "PROPER()", "CAPITAL()"], a: 0 },
-          { id: "EXC_16", q: "Which feature prevents invalid data entry in a cell?", opts: ["Data Validation", "Conditional Formatting", "Filter", "Consolidate"], a: 0 },
-          { id: "EXC_17", q: "What error appears when a column is not wide enough?", opts: ["#####", "#VALUE!", "#REF!", "#NAME?"], a: 0 },
-          { id: "EXC_18", q: "Shortcut to apply Filter in Excel?", opts: ["Ctrl + Shift + L", "Ctrl + F", "Alt + F4", "Ctrl + T"], a: 0 },
-          { id: "EXC_19", q: "Which function returns current date and time?", opts: ["NOW()", "TODAY()", "DATE()", "TIME()"], a: 0 },
-          { id: "EXC_20", q: "Which function combines INDEX and MATCH for lookups?", opts: ["INDEX-MATCH", "VLOOKUP", "HLOOKUP", "LOOKUP"], a: 0 }
-        ]
-      },
-      'Business analytics': {
-        color: '#d97706',
-        lesson: \`
-          <div class="space-y-4 text-sm text-amber-100/90 leading-relaxed text-left font-sans">
-            <h3 class="text-base font-bold text-amber-300 border-b border-amber-500/30 pb-1">Business Analytics Master Module</h3>
-            <p>Data taxonomies, KPI definitions, statistical models, and customer analytics.</p>
-          </div>
-        \`,
-        mcqs: [
-          { id: "BSA_1", q: "What type of analytics explains 'What happened in the past'?", opts: ["Predictive", "Descriptive", "Prescriptive", "Diagnostic"], a: 1 },
-          { id: "BSA_2", q: "What does KPI stand for?", opts: ["Key Process Integration", "Key Performance Indicator", "Known Program Insight", "Key Profit Index"], a: 1 },
-          { id: "BSA_3", q: "What metric tracks customer turnover/loss rate?", opts: ["Churn Rate", "Bounce Rate", "Retention Index", "LTV"], a: 0 },
-          { id: "BSA_4", q: "What does LTV stand for in customer analytics?", opts: ["Long Term Value", "Lifetime Value", "Last Transaction Valuation", "Lead Total Value"], a: 1 },
-          { id: "BSA_5", q: "What testing methodology compares two variations to see which performs better?", opts: ["A/B Testing", "Unit Testing", "Stress Testing", "Alpha Testing"], a: 0 },
-          { id: "BSA_6", q: "What analytics type recommends specific operational actions?", opts: ["Descriptive", "Diagnostic", "Predictive", "Prescriptive"], a: 3 },
-          { id: "BSA_7", q: "What does CAC represent in business metrics?", opts: ["Customer Acquisition Cost", "Company Asset Capital", "Client Access Channel", "Cumulative Account Credit"], a: 0 },
-          { id: "BSA_8", q: "Which chart is best suited for showing numeric trends over continuous time?", opts: ["Pie Chart", "Line Chart", "Donut Chart", "Scatter Plot"], a: 1 },
-          { id: "BSA_9", q: "What is an extreme data point far removed from other observations called?", opts: ["Mean", "Median", "Outlier", "Variance"], a: 2 },
-          { id: "BSA_10", q: "What is tracking user groups with shared characteristics over time called?", opts: ["Cohort Analysis", "Regression", "Factor Analysis", "Segmentation"], a: 0 },
-          { id: "BSA_11", q: "What does ROI stand for?", opts: ["Return on Investment", "Rate of Interest", "Risk of Insolvency", "Revenue on Income"], a: 0 },
-          { id: "BSA_12", q: "Which metric measures customer satisfaction and advocacy?", opts: ["NPS (Net Promoter Score)", "CAC", "LTV", "Churn"], a: 0 },
-          { id: "BSA_13", q: "What type of analytics identifies root causes of issues?", opts: ["Diagnostic", "Descriptive", "Predictive", "Prescriptive"], a: 0 },
-          { id: "BSA_14", q: "What does a correlation coefficient of +1 indicate?", opts: ["Perfect positive linear relation", "No relation", "Negative relation", "Curved relation"], a: 0 },
-          { id: "BSA_15", q: "What is the middle value in a sorted data set called?", opts: ["Median", "Mean", "Mode", "Variance"], a: 0 },
-          { id: "BSA_16", q: "What is Data Cleansing?", opts: ["Removing/fixing corrupt data", "Deleting database", "Encrypting files", "Compressing files"], a: 0 },
-          { id: "BSA_17", q: "What does Conversion Rate measure?", opts: ["% of users completing desired action", "Bounce rate", "Sales speed", "Server load"], a: 0 },
-          { id: "BSA_18", q: "Which model predicts continuous numerical values?", opts: ["Linear Regression", "Classification", "Clustering", "Association Rules"], a: 0 },
-          { id: "BSA_19", q: "What is Market Basket Analysis used for?", opts: ["Finding items bought together", "Calculating taxes", "Pricing items", "Tracking inventory"], a: 0 },
-          { id: "BSA_20", q: "What does SLA stand for in operations?", opts: ["Service Level Agreement", "System Level Access", "Standard Loss Amount", "Strategic Logistics Plan"], a: 0 }
-        ]
-      }
-    };
-
-    function drawRoundedRect(ctx, x, y, width, height, radius, fillStyle, textColor, text) {
-      ctx.fillStyle = fillStyle;
-      ctx.beginPath();
-      ctx.moveTo(x + radius, y);
-      ctx.lineTo(x + width - radius, y);
-      ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
-      ctx.lineTo(x + width, y + height - radius);
-      ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
-      ctx.lineTo(x + radius, y + height);
-      ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
-      ctx.lineTo(x, y + radius);
-      ctx.quadraticCurveTo(x, y, x + radius, y);
-      ctx.closePath();
-      ctx.fill();
-
-      if (text) {
-        ctx.fillStyle = textColor;
-        ctx.fillText(text, x + 6, y + 13);
-      }
-    }
-
-    function switchView(targetView) {
-      if (['lobby', 'login', 'admin', 'pwchange', 'deposit', 'withdraw'].includes(targetView)) {
-        sound.stopAll();
-      }
-      state.currentView = targetView;
-      render();
-    }
+    const GAMES_LIST = [
+      { id: 'aviator', name: 'Aviator 🚀', cat: 'Crash' },
+      { id: 'bigsmall', name: 'Big / Small Dice 🎲', cat: 'Table' },
+      { id: 'colourguess', name: 'Colour Guess 💋', cat: 'Live' },
+      { id: 'candycrash', name: 'Candy Crash 🍬', cat: 'Slots' },
+      { id: 'chickenroad', name: 'Chicken Road 🐔', cat: 'Arcade' },
+      // 45+ Additional Games to complete 50+ list
+      { id: 'plinko', name: 'Plinko Gold 🟡', cat: 'Arcade' },
+      { id: 'mines', name: 'Minesweeper 💣', cat: 'Arcade' },
+      { id: 'limbo', name: 'Limbo X ⚡', cat: 'Crash' },
+      { id: 'dice', name: 'Lucky Dice ⚀', cat: 'Table' },
+      { id: 'roulette', name: 'European Roulette 🎡', cat: 'Table' },
+      { id: 'blackjack', name: 'Classic Blackjack 🃏', cat: 'Cards' },
+      { id: 'baccarat', name: 'Speed Baccarat 🎴', cat: 'Cards' },
+      { id: 'teenpatti', name: 'Indian Teen Patti 👑', cat: 'Cards' },
+      { id: 'andarbahar', name: 'Andar Bahar 🎴', cat: 'Cards' },
+      { id: 'slots777', name: '777 Deluxe Slots 🎰', cat: 'Slots' },
+      { id: 'fruitparty', name: 'Fruit Party Slots 🍒', cat: 'Slots' },
+      { id: 'dragontiger', name: 'Dragon Tiger 🐉', cat: 'Cards' },
+      { id: 'wheeloffortune', name: 'Wheel of Fortune 🎡', cat: 'Live' },
+      { id: 'keno', name: 'Lucky Keno 🔢', cat: 'Lottery' },
+      { id: 'scratchcard', name: 'Golden Scratch 🎫', cat: 'Lottery' },
+      { id: 'bullbull', name: 'Bull Bull 🐂', cat: 'Cards' },
+      { id: 'fishing', name: 'Ocean King Fishing 🎣', cat: 'Arcade' },
+      { id: 'cricketx', name: 'Cricket Crash 🏏', cat: 'Crash' },
+      { id: 'balloon', name: 'Balloon Multiplier 🎈', cat: 'Crash' },
+      { id: 'jetx', name: 'JetX Fighter ✈️', cat: 'Crash' },
+      { id: 'spaceman', name: 'Spaceman Odyssey 👨‍🚀', cat: 'Crash' },
+      { id: 'coinflip', name: 'Coin Toss 🪙', cat: 'Table' },
+      { id: 'hilo', name: 'Hi-Lo Cards 📶', cat: 'Cards' },
+      { id: 'poker', name: 'Texas Holdem Poker ♠️', cat: 'Cards' },
+      { id: 'Sicbo', name: 'Sic Bo Dice 🎲', cat: 'Table' },
+      { id: '7updown', name: '7 Up 7 Down ⬆️', cat: 'Table' },
+      { id: 'jhandimunda', name: 'Jhandi Munda 🎲', cat: 'Table' },
+      { id: 'carroulette', name: 'Car Roulette 🚗', cat: 'Live' },
+      { id: 'dogracing', name: 'Virtual Dog Racing 🐕', cat: 'Virtual' },
+      { id: 'horseracing', name: 'Royal Derby Racing 🐎', cat: 'Virtual' },
+      { id: 'footballx', name: 'Football Penalty ⚽', cat: 'Arcade' },
+      { id: 'tower', name: 'Tower Climber 🗼', cat: 'Arcade' },
+      { id: 'keverse', name: 'K-Verse Odyssey 🌌', cat: 'Slots' },
+      { id: 'egypt', name: 'Book of Ra Egypt 🏛️', cat: 'Slots' },
+      { id: 'wildwest', name: 'Wild West Gold 🤠', cat: 'Slots' },
+      { id: 'mayan', name: 'Mayan Treasures 🗿', cat: 'Slots' },
+      { id: 'pirates', name: 'Pirate Loot 🏴‍☠️', cat: 'Slots' },
+      { id: 'zombie', name: 'Zombie Apocalypse 🧟', cat: 'Slots' },
+      { id: 'vikings', name: 'Viking Valhalla 🪓', cat: 'Slots' },
+      { id: 'dragons', name: 'Dragon Flame 🔥', cat: 'Slots' },
+      { id: 'ganesha', name: 'Ganesha Gold 🐘', cat: 'Slots' },
+      { id: 'candybonanza', name: 'Candy Bonanza 🍬', cat: 'Slots' },
+      { id: 'superslots', name: 'Super 888 Slots 💎', cat: 'Slots' },
+      { id: 'fortunetree', name: 'Fortune Money Tree 🌳', cat: 'Slots' }
+    ];
 
     const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host);
-    ws.onmessage = async (e) => {
+    ws.onmessage = (e) => {
       const data = JSON.parse(e.data);
       if (data.type === 'AVIATOR_STATE') {
         state.aviator = data;
-        if (data.status === 'WAITING') {
-          if (state.nextRoundBet && state.user) {
-            try {
-              const res = await fetch('/api/aviator/bet', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username: state.user.username, betAmount: state.userBet })
-              });
-              const bData = await res.json();
-              if (res.ok) {
-                state.user.balance = bData.newBalance;
-                state.hasBetAviator = true;
-              } else {
-                showPopup(bData.error || 'Bet Failed', 'OK');
-              }
-            } catch(err) {
-              console.error(err);
-            }
-            state.nextRoundBet = false;
-          }
-          state.cashedOut = false;
-        }
-        if (data.status === 'FLYING' && !state.cashedOut) sound.playFly();
-        if (data.status === 'CRASHED' && state.hasBetAviator && !state.cashedOut) {
-          sound.playLoss();
-          if (state.user) {
-            try {
-              const res = await fetch('/api/aviator/loss', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username: state.user.username, betAmount: state.userBet })
-              });
-              const lData = await res.json();
-              if (res.ok) state.user.balance = lData.newBalance;
-            } catch(err) {
-              console.error(err);
-            }
-          }
-          state.hasBetAviator = false;
-        }
-        if (state.currentView === 'aviator') renderAviatorOverlay();
-      } else if (data.type === 'PREDICTION_TICK') {
-        state.marketHistory = data.marketHistory;
-        if (state.currentView === 'prediction') {
-          renderPredictionGraph();
-        }
+        if (data.status === 'WAITING') state.hasBetAviator = false;
+        if (state.view === 'game' && state.currentGame === 'aviator') render();
       }
     };
 
-    function showPopup(title, btnText, onConfirm = null) {
-      state.popup = { title, btnText, onConfirm };
+    function showPopup(msg, btnText='OK') {
+      state.popup = { msg, btnText };
       render();
     }
-    function closePopup() { 
-      if (state.popup && state.popup.onConfirm) state.popup.onConfirm();
-      state.popup = null; 
-      render(); 
-    }
+    function closePopup() { state.popup = null; render(); }
 
     async function handleAuth() {
-      sound.init();
-      const u = document.getElementById('u').value;
-      const p = document.getElementById('p').value;
-      const endpoint = state.authMode === 'signup' ? '/api/signup' : '/api/login';
-      try {
-        const res = await fetch(endpoint, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username: u, password: p })
-        });
-        const data = await res.json();
-        if (res.ok) {
-          state.user = data;
-          if(!state.user.seenQuestions) state.user.seenQuestions = [];
-          switchView(state.user.role === 'admin' ? 'admin' : 'lobby');
-          if (state.user.role === 'admin') fetchAdminData();
-        } else {
-          showPopup(data.error || 'Authentication Failed', 'Try again');
-        }
-      } catch(e) {
-        showPopup('Connection Error', 'Try again');
-      }
-      render();
-    }
+      const mobile = document.getElementById('auth-mobile').value;
+      const pass = document.getElementById('auth-pass').value;
+      const name = document.getElementById('auth-name') ? document.getElementById('auth-name').value : '';
 
-    async function fetchAdminData() {
-      const [uRes, tRes] = await Promise.all([
-        fetch('/api/admin/users'),
-        fetch('/api/admin/transactions')
-      ]);
-      if (uRes.ok) state.adminUsers = await uRes.json();
-      if (tRes.ok) state.adminTxns = await tRes.json();
-      render();
-    }
+      const endpoint = state.authTab === 'register' ? '/api/register' : '/api/login';
+      const body = state.authTab === 'register' ? { name, mobile, password: pass } : { mobile, password: pass };
 
-    function checkLoginInputsDirectly() {
-      const u = document.getElementById('u')?.value || '';
-      const p = document.getElementById('p')?.value || '';
-      const btn = document.getElementById('lbtn');
-      if (btn) {
-        if (u.trim() !== '' && p.trim() !== '') btn.classList.remove('hidden');
-        else btn.classList.add('hidden');
-      }
-    }
-
-    async function changePassword() {
-      const oldPassword = document.getElementById('opw').value;
-      const newPassword = document.getElementById('npw').value;
-      const res = await fetch('/api/change-password', {
+      const res = await fetch(endpoint, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: state.user.username, oldPassword, newPassword })
-      });
-      const data = await res.json();
-      if (res.ok) showPopup(data.message, 'OK');
-      else showPopup(data.error || 'Error', 'OK');
-    }
-
-    async function submitDeposit() {
-      const amount = document.getElementById('depAmt').value;
-      const txnId = document.getElementById('depTxn').value;
-      const res = await fetch('/api/deposit', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: state.user.username, amount, txnId })
-      });
-      const data = await res.json();
-      if (res.ok) showPopup(data.message, 'OK', () => switchView('lobby'));
-      else showPopup(data.error || 'Deposit Failed', 'OK');
-    }
-
-    async function submitWithdrawal() {
-      const amount = document.getElementById('wdAmt').value;
-      const upiId = document.getElementById('wdUpi').value;
-      const res = await fetch('/api/withdraw', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: state.user.username, amount, upiId })
+        body: JSON.stringify(body)
       });
       const data = await res.json();
       if (res.ok) {
-        state.user.balance = data.newBalance;
-        showPopup(data.message, 'OK', () => switchView('lobby'));
+        state.user = data.user;
+        state.view = state.user.role === 'admin' ? 'admin' : 'lobby';
+        if(state.user.role === 'admin') fetchAdminTxns();
+        render();
       } else {
-        showPopup(data.error || 'Withdrawal Failed', 'OK');
+        showPopup(data.error || 'Authentication Failed');
+      }
+    }
+
+    async function handleForgot() {
+      const mobile = document.getElementById('fg-mobile').value;
+      const newPassword = document.getElementById('fg-pass').value;
+      const res = await fetch('/api/forgot-password', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mobile, newPassword })
+      });
+      const data = await res.json();
+      if(res.ok) {
+        showPopup(data.message, 'Login Now');
+        state.authTab = 'login';
+        state.view = 'login';
+      } else {
+        showPopup(data.error);
+      }
+    }
+
+    async function fetchAdminTxns() {
+      const res = await fetch('/api/admin/pending-txns');
+      if(res.ok) {
+        state.adminTxns = await res.json();
+        render();
+      }
+    }
+
+    async function adminModifyBalance(action) {
+      const mobile = document.getElementById('adm-mobile').value;
+      const amtVal = parseFloat(document.getElementById('adm-amt').value);
+      const finalAmt = action === 'add' ? amtVal : -amtVal;
+
+      const res = await fetch('/api/admin/update-balance', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mobile, amount: finalAmt })
+      });
+      const data = await res.json();
+      if(res.ok) {
+        showPopup(\`Success! \${data.name} new balance: ₹\${data.newBalance}\`);
+      } else {
+        showPopup(data.error);
       }
     }
 
     async function processTxn(txnId, action) {
-      const res = await fetch('/api/admin/process-transaction', {
+      const res = await fetch('/api/admin/process-txn', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ txnId, action })
       });
-      if (res.ok) {
-        fetchAdminData();
-        showPopup('Transaction Processed!', 'OK');
-      } else {
-        showPopup('Action Failed', 'OK');
-      }
+      if(res.ok) fetchAdminTxns();
     }
 
-    async function createPlayer() {
-      const username = document.getElementById('nu').value;
-      const password = document.getElementById('np').value;
-      const res = await fetch('/api/admin/create-user', {
+    async function playGameAction(choiceData) {
+      const gameId = state.currentGame;
+      let choice = choiceData;
+      if (gameId === 'chickenroad') {
+        choice = { targetPoint: document.getElementById('ch-target').value };
+      }
+
+      const res = await fetch('/api/play-game', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
-      });
-      if (res.ok) {
-        fetchAdminData();
-        showPopup('User Created Successfully!', 'OK');
-      } else {
-        showPopup('Failed to Create User', 'OK');
-      }
-    }
-
-    async function updateBalance(username, amount) {
-      const res = await fetch('/api/admin/update-balance', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, amount })
-      });
-      if (res.ok) {
-        fetchAdminData();
-        showPopup('Balance Updated!', 'OK');
-      }
-    }
-
-    function updateBetAmount(delta) {
-      state.userBet = Math.max(10, state.userBet + delta);
-      const inputs = document.querySelectorAll('.bet-amt-input');
-      inputs.forEach(i => i.value = state.userBet);
-      if(state.currentView === 'aviator') renderAviatorOverlay();
-      else render();
-    }
-
-    function openCustomBetModal() {
-      state.showCustomBetModal = true;
-      render();
-      setTimeout(() => {
-        const input = document.getElementById('customBetInput');
-        if (input) input.focus();
-      }, 50);
-    }
-
-    function applyCustomBetAmount() {
-      const input = document.getElementById('customBetInput');
-      const val = parseFloat(input?.value);
-      if (!isNaN(val) && val >= 10) {
-        state.userBet = Math.floor(val);
-      } else {
-        state.userBet = 10;
-      }
-      state.showCustomBetModal = false;
-      render();
-    }
-
-    function renderBetControllerUI() {
-      return \`
-        <div class="flex items-center justify-between bg-black/60 p-2 rounded-2xl border border-amber-500/40 w-full max-w-xs shadow-lg">
-          <span class="text-xs text-amber-300 font-bold ml-2">BET AMOUNT:</span>
-          <div class="flex items-center gap-2">
-            <button onclick="updateBetAmount(-10)" class="w-9 h-9 rounded-xl bg-red-900/80 border border-red-500 text-amber-300 font-black text-lg flex items-center justify-center active:scale-95">-</button>
-            <input type="number" readonly onclick="openCustomBetModal()" value="\${state.userBet}" class="bet-amt-input w-20 bg-black/80 border border-amber-500/50 rounded-xl text-center font-mono font-bold text-amber-300 py-1.5 text-sm outline-none cursor-pointer hover:border-amber-400 transition-all">
-            <button onclick="updateBetAmount(10)" class="w-9 h-9 rounded-xl bg-emerald-900/80 border border-emerald-500 text-amber-300 font-black text-lg flex items-center justify-center active:scale-95">+</button>
-          </div>
-        </div>
-      \`;
-    }
-
-    // --- GAME 1: AVIATOR ---
-    async function handleAviatorAction() {
-      sound.init();
-      if (state.aviator.status === 'WAITING' && !state.hasBetAviator) {
-        if(state.user.balance < state.userBet) return showPopup("Insufficient Balance!", "OK");
-        try {
-          const res = await fetch('/api/aviator/bet', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username: state.user.username, betAmount: state.userBet })
-          });
-          const data = await res.json();
-          if (res.ok) {
-            state.user.balance = data.newBalance;
-            state.hasBetAviator = true;
-            renderAviatorOverlay();
-          } else {
-            showPopup(data.error || 'Bet Failed', 'OK');
-          }
-        } catch(e) {
-          showPopup('Connection Error', 'OK');
-        }
-      } else if (state.aviator.status === 'FLYING') {
-        if (state.hasBetAviator && !state.cashedOut) {
-          state.cashedOut = true;
-          try {
-            const res = await fetch('/api/aviator/cashout', {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ username: state.user.username, betAmount: state.userBet, multiplier: state.aviator.currentX })
-            });
-            const data = await res.json();
-            if (res.ok) {
-              state.user.balance = data.newBalance;
-              sound.playWin();
-              showPopup(\`CASHED OUT AT \${state.aviator.currentX.toFixed(2)}x! WON ₹\${data.winAmount}\`, 'Paisa hi Paisa');
-            } else {
-              showPopup(data.error || 'Cashout Failed', 'OK');
-            }
-          } catch(e) {
-            showPopup('Cashout Connection Error', 'OK');
-          }
-          state.hasBetAviator = false;
-          renderAviatorOverlay();
-        } else if (!state.hasBetAviator && !state.nextRoundBet) {
-          if(state.user.balance < state.userBet) return showPopup("Insufficient Balance!", "OK");
-          state.nextRoundBet = true;
-          renderAviatorOverlay();
-        }
-      }
-    }
-
-    function renderAviatorCanvas() {
-      const cvs = document.getElementById('aviator-canvas');
-      if(!cvs) return;
-      const ctx = cvs.getContext('2d');
-      const w = cvs.width = cvs.clientWidth;
-      const h = cvs.height = cvs.clientHeight;
-
-      ctx.clearRect(0, 0, w, h);
-      
-      ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 1;
-      for(let x=0; x<w; x+=30) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke(); }
-      for(let y=0; y<h; y+=30) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); }
-
-      if(state.aviator.status === 'FLYING' || state.aviator.status === 'CRASHED') {
-        const progress = Math.min((state.aviator.currentX - 1) / 8, 1);
-        const endX = 30 + (w - 70) * progress;
-        const endY = (h - 30) - (h - 70) * Math.pow(progress, 0.8);
-
-        ctx.beginPath();
-        ctx.moveTo(30, h - 30);
-        ctx.quadraticCurveTo(w * 0.35, h - 30, endX, endY);
-        ctx.strokeStyle = state.aviator.status === 'CRASHED' ? '#ef4444' : '#eab308';
-        ctx.lineWidth = 4;
-        ctx.stroke();
-
-        ctx.lineTo(endX, h - 30); ctx.lineTo(30, h - 30);
-        ctx.fillStyle = state.aviator.status === 'CRASHED' ? 'rgba(239, 68, 68, 0.2)' : 'rgba(234, 179, 8, 0.2)';
-        ctx.fill();
-
-        ctx.save();
-        ctx.translate(endX, endY);
-        if(state.aviator.status === 'CRASHED') {
-          ctx.font = '32px sans-serif';
-          ctx.fillText('💥', -16, 12);
-        } else {
-          ctx.rotate(-Math.PI / 8);
-          ctx.fillStyle = '#ef4444';
-          ctx.beginPath();
-          ctx.ellipse(0, 0, 16, 7, 0, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.fillStyle = '#ffffff';
-          ctx.beginPath();
-          ctx.moveTo(8, -2); ctx.lineTo(-4, -12); ctx.lineTo(-8, -2);
-          ctx.fill();
-          ctx.beginPath();
-          ctx.moveTo(-10, 0); ctx.lineTo(-16, -6); ctx.lineTo(-16, 6);
-          ctx.fill();
-        }
-        ctx.restore();
-      }
-    }
-
-    function renderAviatorOverlay() {
-      renderAviatorCanvas();
-      const xElem = document.getElementById('aviator-x');
-      const statusElem = document.getElementById('aviator-status');
-      const actionBtn = document.getElementById('aviator-btn');
-
-      if (xElem) {
-        xElem.innerText = state.aviator.currentX.toFixed(2) + 'x';
-        xElem.className = \`text-5xl font-black font-mono \${state.aviator.status === 'CRASHED' ? 'text-red-500' : 'text-amber-400'}\`;
-      }
-      if (statusElem) {
-        statusElem.innerText = state.aviator.status === 'WAITING' ? 'WAITING FOR NEXT ROUND' : (state.aviator.status === 'FLYING' ? 'FLYING' : 'FLEW AWAY!');
-        statusElem.className = \`text-xs font-bold px-3 py-1 rounded-full \${state.aviator.status === 'FLYING' ? 'bg-amber-900/80 text-amber-300 border border-amber-500' : 'bg-red-900/80 text-red-300 border border-red-500'}\`;
-      }
-
-      if (actionBtn) {
-        if (state.aviator.status === 'WAITING') {
-          actionBtn.disabled = state.hasBetAviator;
-          actionBtn.innerHTML = state.hasBetAviator ? 'BET PLACED FOR NEXT ROUND' : \`BET ₹\${state.userBet}\`;
-          actionBtn.className = \`w-full h-14 rounded-2xl font-black text-xl tracking-wider transition-all shadow-lg \${state.hasBetAviator ? 'bg-gray-700 text-gray-400' : 'bg-red-600 text-white border-2 border-red-400'}\`;
-        } else if (state.aviator.status === 'FLYING') {
-          if (state.hasBetAviator && !state.cashedOut) {
-            actionBtn.disabled = false;
-            actionBtn.innerHTML = \`CASH OUT (₹\${(state.userBet * state.aviator.currentX).toFixed(2)})\`;
-            actionBtn.className = 'w-full h-14 rounded-2xl font-black text-xl tracking-wider shadow-lg bg-emerald-500 text-black border-2 border-green-300 animate-pulse';
-          } else if (state.nextRoundBet) {
-            actionBtn.disabled = true;
-            actionBtn.innerHTML = 'BET QUEUED FOR NEXT ROUND';
-            actionBtn.className = 'w-full h-14 rounded-2xl font-black text-lg tracking-wider shadow-lg bg-amber-700 text-amber-200 border border-amber-500';
-          } else {
-            actionBtn.disabled = false;
-            actionBtn.innerHTML = \`BET FOR NEXT ROUND (₹\${state.userBet})\`;
-            actionBtn.className = 'w-full h-14 rounded-2xl font-black text-lg tracking-wider shadow-lg bg-red-700 text-white border border-red-400';
-          }
-        } else {
-          actionBtn.disabled = true;
-          actionBtn.innerHTML = 'ROUND ENDED';
-          actionBtn.className = 'w-full h-14 rounded-2xl font-black text-xl tracking-wider shadow-lg bg-gray-800 text-gray-500';
-        }
-      }
-    }
-
-    // --- GAME 2: GUESS CORRECT (DICE - OPPOSITE RULE) ---
-    async function playDiceGame(choice) {
-      sound.init();
-      if(state.user.balance < state.userBet) return showPopup("Insufficient Balance!", "OK");
-      if(state.diceRolling) return;
-
-      state.diceRolling = true;
-      let animInterval = setInterval(() => {
-        state.diceResults = [Math.floor(Math.random()*6)+1, Math.floor(Math.random()*6)+1];
-        sound.playCoinFlip();
-        render();
-      }, 100);
-
-      const res = await fetch('/api/play-instant', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: state.user.username, game: 'dice', betAmount: state.userBet, choice })
+        body: JSON.stringify({ mobile: state.user.mobile, game: gameId, betAmount: state.userBet, choice })
       });
       const data = await res.json();
-
-      setTimeout(() => {
-        clearInterval(animInterval);
-        state.diceRolling = false;
-        if (res.ok) {
-          state.diceResults = [data.resultMeta.dice1, data.resultMeta.dice2];
-          state.user.balance = data.newBalance;
-          render();
-          
-          setTimeout(() => {
-            if (data.won) {
-              sound.playWin();
-              showPopup(\`MATCHED! Sum is \${data.resultMeta.sum}. WON ₹\${(state.userBet * data.rewardMultiplier).toFixed(2)} (\${data.rewardMultiplier}x)!\`, 'Paisa hi Paisa');
-            } else {
-              sound.playLoss();
-              showPopup(\`MISMATCH! Sum is \${data.resultMeta.sum}. YOU LOST!\`, 'Try Again');
-            }
-          }, 500);
-        } else {
-          showPopup(data.error || 'Error', 'OK');
-        }
-      }, 1500);
-    }
-
-    // --- GAME 3: PREDICTION GRAPH ---
-    async function playPrediction(dir) {
-      sound.init();
-      if(state.user.balance < state.userBet) return showPopup("Insufficient Balance!", "OK");
-      if(state.predictionTimer > 0) return;
-
-      await fetch('/api/prediction/place-bet', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ direction: dir, amount: state.userBet })
-      });
-
-      const startVal = state.marketHistory[state.marketHistory.length - 1];
-      state.predictionMark1 = startVal;
-      state.predictionMark2 = null;
-      state.predictionTimer = 6;
-
-      let timerInterval = setInterval(() => {
-        state.predictionTimer--;
-        sound.playMarketBeep();
+      if (res.ok) {
+        state.user.balance = data.newBalance;
         render();
-        if(state.predictionTimer <= 0) {
-          clearInterval(timerInterval);
-          finishPrediction(dir, startVal);
+        if (data.won) {
+          showPopup(\`🎉 YOU WON ₹\${(state.userBet * data.multiplier).toFixed(2)} (\${data.multiplier}x)!\`);
+        } else {
+          showPopup(\`💥 YOU LOST ₹\${state.userBet}. Better luck next time!\`);
         }
-      }, 1000);
+      } else {
+        showPopup(data.error);
+      }
     }
 
-    async function finishPrediction(dir, startVal) {
-      const endVal = state.marketHistory[state.marketHistory.length - 1];
-      state.predictionMark2 = endVal;
+    async function handleAviatorBet() {
+      if(state.user.balance < state.userBet) return showPopup('Insufficient Balance');
+      await fetch('/api/aviator/register-bet', { method: 'POST' });
+      state.hasBetAviator = true;
+      state.user.balance -= state.userBet;
       render();
+    }
 
-      const res = await fetch('/api/play-instant', {
+    async function submitDeposit() {
+      const amount = document.getElementById('dep-amt').value;
+      const utr = document.getElementById('dep-utr').value;
+      const res = await fetch('/api/deposit-request', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: state.user.username, game: 'prediction', betAmount: state.userBet, choice: { startVal, endVal, direction: dir } })
+        body: JSON.stringify({ mobile: state.user.mobile, amount, utr })
       });
       const data = await res.json();
-
-      setTimeout(() => {
-        if (res.ok) {
-          state.user.balance = data.newBalance;
-          if (data.won) {
-            sound.playWin();
-            showPopup(\`SUCCESS! Entry: ₹\${startVal} | Exit: ₹\${endVal}. WON ₹\${(state.userBet * 2).toFixed(2)}!\`, 'Paisa hi Paisa', () => {
-              state.predictionMark1 = null; state.predictionMark2 = null;
-            });
-          } else {
-            sound.playLoss();
-            showPopup(\`FAILED! Entry: ₹\${startVal} | Exit: ₹\${endVal}. YOU LOST!\`, 'Try Again', () => {
-              state.predictionMark1 = null; state.predictionMark2 = null;
-            });
-          }
-        } else {
-          showPopup(data.error || 'Error', 'OK');
-          state.predictionMark1 = null; state.predictionMark2 = null;
-        }
-        render();
-      }, 1000);
+      if(res.ok) showPopup(data.message, 'OK');
+      else showPopup(data.error);
     }
 
-    // --- GAME 4: CAREERBOOT ENGINE ---
-    function renderCareerBootWheelCanvas() {
-      const cvs = document.getElementById('cb-wheel-canvas');
-      if (!cvs) return;
-      const ctx = cvs.getContext('2d');
-      const dpr = window.devicePixelRatio || 2;
-      const rect = cvs.getBoundingClientRect();
-
-      cvs.width = rect.width * dpr;
-      cvs.height = rect.height * dpr;
-      ctx.scale(dpr, dpr);
-
-      const w = rect.width;
-      const h = rect.height;
-      const r = Math.min(w, h) / 2 - 12;
-      const cx = w / 2;
-      const cy = h / 2;
-
-      ctx.clearRect(0, 0, w, h);
-
-      const slices = Object.keys(CAREERBOOT_DATA);
-      const arc = (Math.PI * 2) / slices.length;
-
-      ctx.save();
-      ctx.translate(cx, cy);
-      ctx.rotate(state.careerboot.wheelAngle);
-
-      slices.forEach((sliceKey, i) => {
-        const sliceStartAngle = i * arc;
-        const sliceEndAngle = sliceStartAngle + arc;
-
-        ctx.beginPath();
-        ctx.fillStyle = CAREERBOOT_DATA[sliceKey].color;
-        ctx.moveTo(0, 0);
-        ctx.arc(0, 0, r, sliceStartAngle, sliceEndAngle);
-        ctx.lineTo(0, 0);
-        ctx.fill();
-
-        ctx.strokeStyle = '#d4af37';
-        ctx.lineWidth = 3;
-        ctx.stroke();
-
-        const labelText = sliceKey.toUpperCase();
-        const textRadius = r * 0.62;
-        const sliceMidAngle = sliceStartAngle + arc / 2;
-
-        let fontSize = 13;
-        ctx.font = \`900 \${fontSize}px ui-sans-serif, system-ui, sans-serif\`;
-        let totalWidth = ctx.measureText(labelText).width;
-        
-        const maxAllowedArcWidth = textRadius * arc * 0.82;
-        if (totalWidth > maxAllowedArcWidth) {
-          fontSize = Math.floor(fontSize * (maxAllowedArcWidth / totalWidth));
-          ctx.font = \`900 \${Math.max(fontSize, 9)}px ui-sans-serif, system-ui, sans-serif\`;
-          totalWidth = ctx.measureText(labelText).width;
-        }
-
-        ctx.fillStyle = '#ffffff';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.shadowColor = 'rgba(0,0,0,0.9)';
-        ctx.shadowBlur = 6;
-
-        let currentAngle = sliceMidAngle - (totalWidth / textRadius) / 2;
-
-        for (let j = 0; j < labelText.length; j++) {
-          const char = labelText[j];
-          const charWidth = ctx.measureText(char).width;
-          const charAngle = currentAngle + (charWidth / 2) / textRadius;
-
-          ctx.save();
-          ctx.rotate(charAngle);
-          ctx.translate(textRadius, 0);
-          ctx.rotate(Math.PI / 2);
-          ctx.fillText(char, 0, 0);
-          ctx.restore();
-
-          currentAngle += charWidth / textRadius;
-        }
-      });
-
-      ctx.restore();
-
-      ctx.fillStyle = '#fcf6ba';
-      ctx.beginPath();
-      ctx.moveTo(cx - 12, cy - r - 6);
-      ctx.lineTo(cx + 12, cy - r - 6);
-      ctx.lineTo(cx, cy - r + 18);
-      ctx.fill();
-      ctx.strokeStyle = '#800a0a';
-      ctx.lineWidth = 2.5;
-      ctx.stroke();
-    }
-
-    async function spinCareerBootWheel() {
-      sound.init();
-      if (state.user.balance < state.userBet) return showPopup("Insufficient Balance!", "OK");
-      if (state.careerboot.spinning) return;
-
-      state.careerboot.spinning = true;
-      const slices = Object.keys(CAREERBOOT_DATA);
-      const chosenIndex = Math.floor(Math.random() * slices.length);
-      const chosenSlice = slices[chosenIndex];
-
-      const arc = (Math.PI * 2) / slices.length;
-      const targetSliceCenter = chosenIndex * arc + (arc / 2);
-      let targetAngle = (Math.PI * 1.5) - targetSliceCenter;
-      if (targetAngle < 0) targetAngle += Math.PI * 2;
-
-      const totalSpins = 5 * Math.PI * 2;
-      const finalAngle = state.careerboot.wheelAngle + totalSpins + targetAngle - (state.careerboot.wheelAngle % (Math.PI * 2));
-
-      let startTime = null;
-      const duration = 3000;
-
-      function animateSpin(timestamp) {
-        if (!startTime) startTime = timestamp;
-        let elapsed = timestamp - startTime;
-        let progress = Math.min(elapsed / duration, 1);
-        let easeOut = 1 - Math.pow(1 - progress, 3);
-
-        state.careerboot.wheelAngle = easeOut * finalAngle;
-        sound.playCoinFlip();
-        renderCareerBootWheelCanvas();
-
-        if (progress < 1) {
-          requestAnimationFrame(animateSpin);
-        } else {
-          state.careerboot.spinning = false;
-          state.careerboot.selectedSlice = chosenSlice;
-          state.careerboot.stage = 'LESSON';
-          render();
-        }
-      }
-
-      requestAnimationFrame(animateSpin);
-    }
-
-    async function startCareerBootMCQs() {
-      const sliceObj = CAREERBOOT_DATA[state.careerboot.selectedSlice];
-      state.careerboot.round = 1;
-      state.careerboot.questionIndex = 0;
-      state.careerboot.accumulatedMultiplier = 0;
-      state.careerboot.selectedAnswer = null;
-      state.careerboot.isAnswered = false;
-      state.careerboot.askedQuestionIdsThisGame = [];
-
-      const res = await fetch('/api/careerboot/next-sequence', {
+    async function submitWithdraw() {
+      const amount = document.getElementById('wd-amt').value;
+      const bankDetails = document.getElementById('wd-bank').value;
+      const res = await fetch('/api/withdraw-request', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: state.user.username, subject: state.careerboot.selectedSlice })
+        body: JSON.stringify({ mobile: state.user.mobile, amount, bankDetails })
       });
-      const seqData = await res.json();
-      const step = seqData.currentStep || 0;
-
-      let startIdx = step * 10;
-      let selected10 = sliceObj.mcqs.slice(startIdx, startIdx + 10);
-
-      state.careerboot.activeQuestions = selected10;
-      state.careerboot.askedQuestionIdsThisGame = selected10.map(q => q.id);
-
-      state.careerboot.stage = 'MCQ';
-      render();
-    }
-
-    async function handleCareerBootAnswer(selectedOptIndex) {
-      if (state.careerboot.isAnswered) return;
-
-      state.careerboot.selectedAnswer = selectedOptIndex;
-      state.careerboot.isAnswered = true;
-
-      const qIdx = state.careerboot.questionIndex;
-      const currentQ = state.careerboot.activeQuestions[qIdx];
-
-      render();
-
-      if (selectedOptIndex === currentQ.a) {
-        sound.playWin();
-        state.careerboot.accumulatedMultiplier += 0.20;
-
-        setTimeout(async () => {
-          state.careerboot.selectedAnswer = null;
-          state.careerboot.isAnswered = false;
-
-          if (state.careerboot.questionIndex < state.careerboot.activeQuestions.length - 1) {
-            state.careerboot.questionIndex++;
-          } else {
-            const finalMult = state.careerboot.accumulatedMultiplier;
-            const res = await fetch('/api/play-instant', {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                username: state.user.username,
-                game: 'careerboot',
-                betAmount: state.userBet,
-                choice: {
-                  won: true,
-                  multiplier: finalMult,
-                  askedQuestionIds: state.careerboot.askedQuestionIdsThisGame
-                }
-              })
-            });
-            const data = await res.json();
-            if (res.ok) {
-              state.user.balance = data.newBalance;
-              state.user.seenQuestions = data.seenQuestions || [];
-            }
-
-            sound.playWin();
-            showPopup(\`ALL 10 QUESTIONS PASSED! Total Multiplier \${finalMult.toFixed(2)}x! WON ₹\${(state.userBet * finalMult).toFixed(2)}!\`, 'Paisa hi Paisa', () => {
-              state.careerboot.stage = 'WHEEL';
-            });
-          }
-          render();
-        }, 1000);
-
+      const data = await res.json();
+      if(res.ok) {
+        state.user.balance = data.newBalance;
+        showPopup(data.message, 'OK');
       } else {
-        sound.playLoss();
-        const res = await fetch('/api/play-instant', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            username: state.user.username,
-            game: 'careerboot',
-            betAmount: state.userBet,
-            choice: {
-              won: false,
-              multiplier: 0,
-              askedQuestionIds: state.careerboot.askedQuestionIdsThisGame
-            }
-          })
-        });
-        const data = await res.json();
-        if (res.ok) {
-          state.user.balance = data.newBalance;
-          state.user.seenQuestions = data.seenQuestions || [];
-        }
-
-        setTimeout(() => {
-          showPopup(\`WRONG ANSWER! Correct option was highlighted in green. YOU LOST ₹\${state.userBet}.\`, 'Try Again', () => {
-            state.careerboot.selectedAnswer = null;
-            state.careerboot.isAnswered = false;
-            state.careerboot.stage = 'WHEEL';
-          });
-        }, 1600);
-      }
-    }
-
-    function renderPredictionGraph() {
-      const cvs = document.getElementById('market-canvas');
-      if(!cvs) return;
-      const ctx = cvs.getContext('2d');
-      const w = cvs.width = cvs.clientWidth;
-      const h = cvs.height = cvs.clientHeight;
-
-      ctx.clearRect(0, 0, w, h);
-      
-      const pts = state.marketHistory;
-      let minVal = Math.min(...pts, state.predictionMark1 || Infinity, state.predictionMark2 || Infinity) - 15;
-      let maxVal = Math.max(...pts, state.predictionMark1 || -Infinity, state.predictionMark2 || -Infinity) + 15;
-      if (minVal === Infinity) minVal = 40;
-      if (maxVal === -Infinity) maxVal = 220;
-      let range = maxVal - minVal || 1;
-
-      ctx.strokeStyle = '#1e293b';
-      ctx.lineWidth = 0.5;
-      for (let y = 0; y < h; y += 25) {
-        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
-      }
-      for (let x = 0; x < w; x += 35) {
-        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
-      }
-
-      const step = w / (pts.length - 1);
-
-      let fillGrad = ctx.createLinearGradient(0, 0, 0, h);
-      fillGrad.addColorStop(0, 'rgba(34, 197, 94, 0.35)');
-      fillGrad.addColorStop(1, 'rgba(34, 197, 94, 0.00)');
-
-      ctx.beginPath();
-      for(let i = 0; i < pts.length; i++) {
-        let y = h - ((pts[i] - minVal) / range) * (h - 30) - 15;
-        let x = i * step;
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      }
-      
-      let lastVal = pts[pts.length - 1];
-      let lastX = w;
-      let lastY = h - ((lastVal - minVal) / range) * (h - 30) - 15;
-
-      ctx.lineTo(lastX, h);
-      ctx.lineTo(0, h);
-      ctx.fillStyle = fillGrad;
-      ctx.fill();
-
-      ctx.beginPath();
-      for(let i = 0; i < pts.length; i++) {
-        let y = h - ((pts[i] - minVal) / range) * (h - 30) - 15;
-        let x = i * step;
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      }
-      ctx.shadowColor = '#22c55e';
-      ctx.shadowBlur = 12;
-      ctx.strokeStyle = '#22c55e';
-      ctx.lineWidth = 3.5;
-      ctx.stroke();
-      ctx.shadowBlur = 0;
-
-      state.pulseRadius = (state.pulseRadius + 0.3) % 12;
-      ctx.beginPath();
-      ctx.arc(lastX - 4, lastY, 4 + state.pulseRadius, 0, Math.PI * 2);
-      ctx.strokeStyle = \`rgba(34, 197, 94, \${1 - state.pulseRadius / 12})\`;
-      ctx.lineWidth = 2;
-      ctx.stroke();
-
-      ctx.beginPath();
-      ctx.arc(lastX - 4, lastY, 5, 0, Math.PI * 2);
-      ctx.fillStyle = '#ffffff';
-      ctx.fill();
-
-      drawRoundedRect(ctx, lastX - 68, lastY - 26, 62, 20, 6, '#22c55e', '#000000', '₹' + lastVal);
-
-      if (state.predictionMark1) {
-        let y1 = h - ((state.predictionMark1 - minVal) / range) * (h - 30) - 15;
-        ctx.beginPath();
-        ctx.shadowColor = '#eab308';
-        ctx.shadowBlur = 8;
-        ctx.strokeStyle = '#eab308';
-        ctx.lineWidth = 2;
-        ctx.setLineDash([6, 4]);
-        ctx.moveTo(0, y1); ctx.lineTo(w, y1);
-        ctx.stroke();
-        ctx.setLineDash([]);
-        ctx.shadowBlur = 0;
-
-        drawRoundedRect(ctx, 8, y1 - 20, 100, 18, 4, '#eab308', '#000000', 'ENTRY: ₹' + state.predictionMark1);
-      }
-
-      if (state.predictionMark2) {
-        let y2 = h - ((state.predictionMark2 - minVal) / range) * (h - 30) - 15;
-        ctx.beginPath();
-        ctx.shadowColor = '#06b6d4';
-        ctx.shadowBlur = 8;
-        ctx.strokeStyle = '#06b6d4';
-        ctx.lineWidth = 2;
-        ctx.setLineDash([6, 4]);
-        ctx.moveTo(0, y2); ctx.lineTo(w, y2);
-        ctx.stroke();
-        ctx.setLineDash([]);
-        ctx.shadowBlur = 0;
-
-        drawRoundedRect(ctx, w - 108, y2 - 20, 100, 18, 4, '#06b6d4', '#000000', 'EXIT: ₹' + state.predictionMark2);
+        showPopup(data.error);
       }
     }
 
     // ==========================================
-    // UI RENDER ENGINE
+    // RENDER ENGINE
     // ==========================================
     function render() {
       const app = document.getElementById('app');
       let html = '';
 
-      let popupHtml = '';
-      if (state.popup) {
-        popupHtml = \`
-          <div class="absolute inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-            <div class="tomato-card p-6 rounded-3xl max-w-xs w-full text-center space-y-4 popup-anim">
-              <h2 class="text-xl font-black text-amber-300 tracking-wide">\${state.popup.title}</h2>
-              <button onclick="closePopup()" class="w-full gold-gradient text-black font-black py-3 rounded-2xl shadow-xl active:scale-95">
-                \${state.popup.btnText}
-              </button>
-            </div>
+      let popupHtml = state.popup ? \`
+        <div class="absolute inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div class="tomato-card p-6 rounded-3xl max-w-xs w-full text-center space-y-4">
+            <h2 class="text-xl font-black text-amber-300">\${state.popup.msg}</h2>
+            <button onclick="closePopup()" class="w-full gold-gradient text-black font-black py-3 rounded-2xl shadow-xl">\${state.popup.btnText}</button>
           </div>
-        \`;
-      }
+        </div>
+      \` : '';
 
-      let customBetModalHtml = '';
-      if (state.showCustomBetModal) {
-        customBetModalHtml = \`
-          <div class="absolute inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-            <div class="tomato-card p-6 rounded-3xl max-w-xs w-full text-center space-y-4 popup-anim">
-              <h2 class="text-lg font-black text-amber-300 tracking-wide">Enter Custom Bet Amount</h2>
-              <input id="customBetInput" type="number" min="10" value="\${state.userBet}" placeholder="Enter amount (Min ₹10)" class="w-full p-3 rounded-2xl bg-black/80 border border-amber-500/50 text-amber-300 text-center font-mono font-bold text-lg outline-none">
-              <div class="flex gap-2">
-                <button onclick="state.showCustomBetModal=false; render();" class="w-1/2 py-3 bg-gray-800 text-gray-300 font-bold rounded-2xl active:scale-95 text-xs">Cancel</button>
-                <button onclick="applyCustomBetAmount()" class="w-1/2 gold-gradient text-black font-black py-3 rounded-2xl shadow-xl active:scale-95 text-xs">Set Bet</button>
-              </div>
-            </div>
-          </div>
-        \`;
-      }
-
-      if (state.currentView === 'login') {
-        const isSignUp = state.authMode === 'signup';
+      if (state.view === 'login' || state.view === 'register') {
+        const isReg = state.view === 'register';
         html = \`
           <div class="h-full w-full flex flex-col items-center justify-center p-6 bg-gradient-to-b from-[#2a0404] to-[#0d0202]">
             <div class="tomato-card p-8 rounded-3xl w-full text-center space-y-5">
-              <div class="text-6xl">🤑</div>
+              <div class="text-5xl">👑</div>
               <div>
-                <h1 class="text-3xl font-black gold-text tracking-wider">Skilled Old Hand</h1>
-                <p class="text-xs font-semibold text-amber-200/70 mt-1">\${isSignUp ? 'Create New Account' : 'Shree Ganesh Karte Hai'}</p>
+                <h1 class="text-2xl font-black gold-text">K³ (Kismat Ka Khel)</h1>
+                <p class="text-xs text-amber-200/70 mt-1">50+ Ultimate Casino & Betting Games</p>
               </div>
-
               <div class="flex bg-black/50 p-1 rounded-xl border border-amber-500/30">
-                <button onclick="state.authMode='login'; render();" class="w-1/2 py-2 rounded-lg text-xs font-bold \${!isSignUp ? 'gold-gradient text-black' : 'text-amber-300/60'}\">LOGIN</button>
-                <button onclick="state.authMode='signup'; render();" class="w-1/2 py-2 rounded-lg text-xs font-bold \${isSignUp ? 'gold-gradient text-black' : 'text-amber-300/60'}\">CREATE ACCOUNT</button>
+                <button onclick="state.view='login'; render();" class="w-1/2 py-2 rounded-lg text-xs font-bold \${!isReg ? 'gold-gradient text-black' : 'text-amber-300/60'}">LOGIN</button>
+                <button onclick="state.view='register'; render();" class="w-1/2 py-2 rounded-lg text-xs font-bold \${isReg ? 'gold-gradient text-black' : 'text-amber-300/60'}">REGISTER</button>
               </div>
-
               <div class="space-y-3">
-                <input id="u" oninput="checkLoginInputsDirectly()" type="text" placeholder="Username" class="w-full p-4 rounded-2xl bg-black/60 border border-amber-500/40 text-white placeholder-amber-200/40 text-sm outline-none">
-                <input id="p" oninput="checkLoginInputsDirectly()" type="password" placeholder="Password" class="w-full p-4 rounded-2xl bg-black/60 border border-amber-500/40 text-white placeholder-amber-200/40 text-sm outline-none">
+                \${isReg ? \`<input id="auth-name" type="text" placeholder="Full Name" class="w-full p-3.5 rounded-2xl bg-black/60 border border-amber-500/40 text-white text-sm outline-none">\` : ''}
+                <input id="auth-mobile" type="tel" placeholder="Mobile Number" class="w-full p-3.5 rounded-2xl bg-black/60 border border-amber-500/40 text-white text-sm outline-none">
+                <input id="auth-pass" type="password" placeholder="Password" class="w-full p-3.5 rounded-2xl bg-black/60 border border-amber-500/40 text-white text-sm outline-none">
               </div>
-              <button id="lbtn" onclick="handleAuth()" class="hidden w-full gold-gradient text-black font-black py-4 rounded-2xl shadow-xl text-lg">
-                \${isSignUp ? 'REGISTER NOW 🚀' : 'Paisa hi Paisa Hoga 💰'}
-              </button>
+              <button onclick="handleAuth()" class="w-full gold-gradient text-black font-black py-4 rounded-2xl shadow-xl text-md">\${isReg ? 'CREATE ACCOUNT 🚀' : 'LOGIN TO PLAY 💰'}</button>
+              <button onclick="state.view='forgot'; render();" class="text-xs text-amber-300 underline font-semibold">Forgot Password?</button>
+            </div>
+          </div>
+        \`;
+      } 
+      else if (state.view === 'forgot') {
+        html = \`
+          <div class="h-full w-full flex flex-col items-center justify-center p-6 bg-[#120303]">
+            <div class="tomato-card p-6 rounded-3xl w-full space-y-4 text-center">
+              <h2 class="text-lg font-black text-amber-300">Reset Password</h2>
+              <input id="fg-mobile" type="tel" placeholder="Registered Mobile" class="w-full p-3 bg-black/60 border border-amber-500/40 text-white text-sm rounded-xl">
+              <input id="fg-pass" type="password" placeholder="New Password" class="w-full p-3 bg-black/60 border border-amber-500/40 text-white text-sm rounded-xl">
+              <button onclick="handleForgot()" class="w-full gold-gradient text-black font-black py-3 rounded-xl text-sm">Update Password</button>
+              <button onclick="state.view='login'; render();" class="text-xs text-amber-300">Back to Login</button>
             </div>
           </div>
         \`;
       }
-
-      else if (state.currentView === 'lobby') {
+      else if (state.view === 'lobby') {
         html = \`
           <div class="h-full w-full flex flex-col bg-[#120303]">
             <div class="h-16 px-4 bg-gradient-to-r from-red-950 via-black to-red-950 border-b border-amber-500/40 flex items-center justify-between shadow-lg shrink-0">
-              <span class="font-black text-lg gold-text">Skilled Old Hand 🤑</span>
+              <span class="font-black text-md gold-text">K³ Khel 👑</span>
               <div class="flex items-center gap-2">
-                <div class="bg-black/60 px-3 py-1.5 rounded-full border border-amber-500/40">
+                <div class="bg-black/60 px-3 py-1.5 rounded-full border border-amber-500/40 flex items-center gap-1">
                   <span class="text-xs text-amber-300 font-bold">₹</span>
                   <span class="text-sm font-mono font-bold text-green-400">\${state.user.balance.toFixed(2)}</span>
                 </div>
-                <button onclick="switchView('pwchange')" class="px-2.5 py-1 bg-amber-600/30 border border-amber-500/50 rounded-lg text-[10px] font-bold text-amber-300">Password</button>
-                <button onclick="switchView('login')" class="px-2.5 py-1 bg-red-900/50 border border-red-500/50 rounded-lg text-[10px] font-bold text-red-300">Logout</button>
+                <button onclick="state.view='login'; render();" class="px-2 py-1 bg-red-900/50 rounded-lg text-[10px] text-red-300">Logout</button>
               </div>
             </div>
-
-            <!-- WALLET ACTIONS BAR -->
             <div class="p-3 bg-black/40 border-b border-amber-500/20 flex gap-3 shrink-0">
-              <button onclick="switchView('deposit')" class="w-1/2 py-2.5 bg-emerald-700/80 border border-emerald-400/60 rounded-xl font-bold text-white text-xs flex items-center justify-center gap-2 active:scale-95">
-                <span>➕ DEPOSIT</span>
-              </button>
-              <button onclick="switchView('withdraw')" class="w-1/2 py-2.5 bg-amber-700/80 border border-amber-400/60 rounded-xl font-bold text-white text-xs flex items-center justify-center gap-2 active:scale-95">
-                <span>💸 WITHDRAW</span>
-              </button>
+              <button onclick="state.view='deposit'; render();" class="w-1/2 py-2.5 bg-emerald-700/80 rounded-xl font-bold text-white text-xs">➕ DEPOSIT</button>
+              <button onclick="state.view='withdraw'; render();" class="w-1/2 py-2.5 bg-amber-700/80 rounded-xl font-bold text-white text-xs">💸 WITHDRAW</button>
             </div>
-
-            <div class="flex-1 p-4 grid grid-cols-2 gap-4 overflow-y-auto">
-              \${[
-                { id: 'careerboot', name: 'CareerBoot', icon: '🎓', desc: 'Wheel & MCQ Rounds' },
-                { id: 'aviator', name: 'Aviator', icon: '🚀', desc: 'Realtime Multiplier' },
-                { id: 'guesscorrect', name: 'Guess Correct', icon: '🎲', desc: 'Big vs Small Dice' },
-                { id: 'prediction', name: 'Prediction', icon: '📈', desc: 'Live Market Line' }
-              ].map(g => \`
-                <button onclick="switchView('\${g.id}')" class="tomato-card p-4 rounded-3xl flex flex-col items-center justify-center text-center space-y-2 active:scale-95 transition-all">
-                  <span class="text-4xl">\${g.icon}</span>
-                  <div>
-                    <div class="font-black text-amber-300 text-sm">\${g.name}</div>
-                    <div class="text-[10px] text-amber-100/60">\${g.desc}</div>
-                  </div>
+            <div class="flex-1 p-3 grid grid-cols-2 gap-3 overflow-y-auto">
+              \${GAMES_LIST.map(g => \`
+                <button onclick="state.currentGame='\${g.id}'; state.view='game'; render();" class="tomato-card p-4 rounded-2xl flex flex-col items-center justify-center text-center space-y-1 active:scale-95">
+                  <div class="font-black text-amber-300 text-sm">\${g.name}</div>
+                  <span class="text-[9px] px-2 py-0.5 bg-black/50 rounded-full text-amber-200/70 border border-amber-500/20">\${g.cat}</span>
                 </button>
               \`).join('')}
             </div>
           </div>
         \`;
       }
-
-      else if (state.currentView === 'deposit') {
+      else if (state.view === 'deposit') {
         html = \`
           <div class="h-full w-full flex flex-col bg-[#120303] p-6 justify-center">
             <div class="tomato-card p-6 rounded-3xl space-y-4">
               <div class="flex justify-between items-center border-b border-amber-500/40 pb-2">
-                <h2 class="text-xl font-black text-amber-300">Deposit Money</h2>
-                <button onclick="switchView('lobby')" class="text-xs font-bold text-amber-200">Back</button>
+                <h2 class="text-lg font-black text-amber-300">Deposit Funds</h2>
+                <button onclick="state.view='lobby'; render();" class="text-xs text-amber-200">Back</button>
               </div>
-              <div class="bg-black/60 p-4 rounded-2xl border border-amber-500/30 text-center space-y-1">
-                <span class="text-xs text-amber-200/70">Pay via UPI to Official ID:</span>
-                <div class="text-lg font-mono font-black text-amber-300 select-all">kismat420@airtel</div>
+              <div class="bg-black/60 p-3 rounded-xl border border-amber-500/30 text-center">
+                <span class="text-[11px] text-amber-200/70">Scan or Pay via UPI:</span>
+                <div class="text-base font-mono font-black text-amber-300 select-all">9005041462@upi</div>
               </div>
-              <input id="depAmt" type="number" placeholder="Enter Amount (₹)" class="w-full p-3 bg-black/60 border border-amber-500/40 rounded-xl text-sm outline-none text-white">
-              <input id="depTxn" type="text" placeholder="Transaction Reference / UTR ID" class="w-full p-3 bg-black/60 border border-amber-500/40 rounded-xl text-sm outline-none text-white">
-              <button onclick="submitDeposit()" class="w-full gold-gradient text-black font-black py-3 rounded-xl text-sm">Submit Deposit</button>
+              <input id="dep-amt" type="number" placeholder="Enter Amount (₹)" class="w-full p-3 bg-black/60 border border-amber-500/40 rounded-xl text-sm text-white">
+              <input id="dep-utr" type="text" placeholder="Transaction / UTR Number" class="w-full p-3 bg-black/60 border border-amber-500/40 rounded-xl text-sm text-white">
+              <a href="upi://pay?pa=9005041462@upi&pn=K3Khel&am=100&cu=INR" class="block w-full text-center bg-blue-600 font-black py-3 rounded-xl text-white text-xs">📲 OPEN UPI PAYMENT APP</a>
+              <button onclick="submitDeposit()" class="w-full gold-gradient text-black font-black py-3 rounded-xl text-xs">Submit Deposit Request</button>
             </div>
           </div>
         \`;
       }
-
-      else if (state.currentView === 'withdraw') {
+      else if (state.view === 'withdraw') {
         html = \`
           <div class="h-full w-full flex flex-col bg-[#120303] p-6 justify-center">
             <div class="tomato-card p-6 rounded-3xl space-y-4">
               <div class="flex justify-between items-center border-b border-amber-500/40 pb-2">
-                <h2 class="text-xl font-black text-amber-300">Withdraw Funds</h2>
-                <button onclick="switchView('lobby')" class="text-xs font-bold text-amber-200">Back</button>
+                <h2 class="text-lg font-black text-amber-300">Withdraw Funds</h2>
+                <button onclick="state.view='lobby'; render();" class="text-xs text-amber-200">Back</button>
               </div>
-              <div class="text-xs text-amber-200/80">Available Balance: <span class="font-mono text-green-400 font-bold">₹\${state.user.balance.toFixed(2)}</span></div>
-              <input id="wdAmt" type="number" placeholder="Enter Amount (₹)" class="w-full p-3 bg-black/60 border border-amber-500/40 rounded-xl text-sm outline-none text-white">
-              <input id="wdUpi" type="text" placeholder="Your Receiving UPI ID" class="w-full p-3 bg-black/60 border border-amber-500/40 rounded-xl text-sm outline-none text-white">
-              <button onclick="submitWithdrawal()" class="w-full bg-amber-600 border border-amber-400 text-black font-black py-3 rounded-xl text-sm">Request Withdrawal</button>
+              <div class="text-xs text-amber-200/80">Available: <span class="font-mono text-green-400 font-bold">₹\${state.user.balance.toFixed(2)}</span></div>
+              <input id="wd-amt" type="number" placeholder="Amount (₹)" class="w-full p-3 bg-black/60 border border-amber-500/40 rounded-xl text-sm text-white">
+              <input id="wd-bank" type="text" placeholder="UPI ID / Bank Account Details" class="w-full p-3 bg-black/60 border border-amber-500/40 rounded-xl text-sm text-white">
+              <button onclick="submitWithdraw()" class="w-full bg-amber-600 text-black font-black py-3 rounded-xl text-xs">Request Withdrawal</button>
             </div>
           </div>
         \`;
       }
+      else if (state.view === 'game') {
+        const gameObj = GAMES_LIST.find(g => g.id === state.currentGame);
+        let gameContent = '';
 
-      else if (state.currentView === 'careerboot') {
-        const cb = state.careerboot;
-        if (cb.stage === 'WHEEL') {
-          html = \`
-            <div class="h-full w-full flex flex-col bg-[#120303]">
-              <div class="h-14 px-3 bg-red-950 border-b border-amber-500/40 flex items-center justify-between">
-                <button onclick="switchView('lobby')" class="px-3 py-1 bg-red-900 border border-amber-500/40 rounded-xl text-xs font-bold text-white">Lobby</button>
-                <span class="font-black gold-text">CAREERBOOT WHEEL</span>
-                <span class="font-mono text-sm text-green-400 font-bold">₹\${state.user.balance.toFixed(2)}</span>
+        if (state.currentGame === 'aviator') {
+          gameContent = \`
+            <div class="flex-1 flex flex-col items-center justify-center p-4 space-y-4">
+              <div class="text-4xl font-mono font-black gold-text">\${state.aviator.currentX.toFixed(2)}x</div>
+              <div class="text-xs font-bold px-3 py-1 rounded-full bg-amber-900/80 text-amber-300">\${state.aviator.status}</div>
+              <button onclick="handleAviatorBet()" \${state.hasBetAviator ? 'disabled' : ''} class="w-full max-w-xs h-14 rounded-2xl font-black text-xl gold-gradient text-black">\${state.hasBetAviator ? 'BET PLACED' : 'PLACE BET ₹' + state.userBet}</button>
+            </div>
+          \`;
+        } else if (state.currentGame === 'bigsmall') {
+          gameContent = \`
+            <div class="flex-1 flex flex-col items-center justify-center p-6 space-y-4">
+              <div class="tomato-card p-6 rounded-3xl w-full text-center">
+                <p class="text-xs text-amber-200">Guess the Sum of 2 Dices</p>
               </div>
-              <div class="flex-1 flex flex-col items-center justify-center p-4 space-y-4">
-                <div class="relative w-72 h-72 flex items-center justify-center">
-                  <canvas id="cb-wheel-canvas" class="w-full h-full"></canvas>
-                </div>
-                \${renderBetControllerUI()}
-                <button onclick="spinCareerBootWheel()" \${cb.spinning ? 'disabled' : ''} class="w-full max-w-xs h-14 rounded-2xl font-black text-xl tracking-wider gold-gradient text-black shadow-xl active:scale-95 transition-all">
-                  \${cb.spinning ? 'SPINNING...' : 'SPIN THE WHEEL 🎡'}
-                </button>
+              <div class="grid grid-cols-2 gap-4 w-full max-w-xs">
+                <button onclick="playGameAction('small')" class="tomato-card h-20 rounded-2xl font-black text-amber-300 text-lg">SMALL (2-6)</button>
+                <button onclick="playGameAction('big')" class="tomato-card h-20 rounded-2xl font-black text-amber-300 text-lg">BIG (7-12)</button>
               </div>
             </div>
           \`;
-        } else if (cb.stage === 'LESSON') {
-          const sliceData = CAREERBOOT_DATA[cb.selectedSlice];
-          html = \`
-            <div class="h-full w-full flex flex-col bg-[#120303] animate-expand">
-              <div class="h-14 px-3 bg-red-950 border-b border-amber-500/40 flex items-center justify-between shrink-0">
-                <button onclick="state.careerboot.stage='WHEEL'; render();" class="px-3 py-1 bg-red-900 border border-amber-500/40 rounded-xl text-xs font-bold text-white">Wheel</button>
-                <span class="font-black gold-text uppercase">\${cb.selectedSlice} MASTER CLASS</span>
-                <span class="font-mono text-sm text-green-400 font-bold">₹\${state.user.balance.toFixed(2)}</span>
-              </div>
-              <div class="flex-1 p-5 overflow-y-auto space-y-4">
-                <div class="tomato-card p-6 rounded-3xl space-y-3">
-                  <div class="flex items-center gap-2">
-                    <span class="text-2xl">📖</span>
-                    <h2 class="text-xl font-black text-amber-300 uppercase">\${cb.selectedSlice} Deep Detailed Chapter</h2>
-                  </div>
-                  \${sliceData.lesson}
-                </div>
-              </div>
-              <div class="p-4 bg-red-950 border-t border-amber-500/40 shrink-0 flex justify-center">
-                <button onclick="startCareerBootMCQs()" class="w-full max-w-xs h-14 rounded-2xl font-black text-lg gold-gradient text-black shadow-xl active:scale-95">
-                  START MCQ QUIZ 🚀
-                </button>
+        } else if (state.currentGame === 'colourguess') {
+          gameContent = \`
+            <div class="flex-1 flex flex-col items-center justify-center p-4 space-y-3">
+              <div class="text-xs text-amber-300 font-bold">Select Colour (Red 15%, White 15%, Green 20%, Black 20%, Yellow 15%, Blue 20%)</div>
+              <div class="grid grid-cols-3 gap-3 w-full max-w-xs">
+                \['Red','White','Green','Black','Yellow','Blue'].map(c => \`
+                  <button onclick="playGameAction('\${c}')" class="p-4 rounded-xl font-bold text-black gold-gradient">\${c}</button>
+                \`).join('')}
               </div>
             </div>
           \`;
-        } else if (cb.stage === 'MCQ') {
-          const qIdx = cb.questionIndex;
-          const qObj = cb.activeQuestions[qIdx];
-
-          html = \`
-            <div class="h-full w-full flex flex-col bg-[#120303]">
-              <div class="h-14 px-3 bg-red-950 border-b border-amber-500/40 flex items-center justify-between shrink-0">
-                <span class="text-xs font-bold text-amber-300">QUESTION \${qIdx + 1}/\${cb.activeQuestions.length}</span>
-                <span class="font-black gold-text uppercase">\${cb.selectedSlice}</span>
-                <span class="text-xs font-mono font-bold text-green-400">MULT: +0.20x</span>
-              </div>
-              <div class="p-3 bg-black/40 border-b border-amber-500/20 flex justify-between items-center shrink-0">
-                <span class="text-xs text-amber-200/70 font-semibold">Question \${qIdx + 1} of \${cb.activeQuestions.length}</span>
-                <span class="text-xs font-mono text-amber-300 font-bold">ACCUMULATED: \${cb.accumulatedMultiplier.toFixed(2)}x</span>
-              </div>
-              <div class="flex-1 p-5 flex flex-col justify-between overflow-y-auto">
-                <div class="tomato-card p-6 rounded-3xl space-y-4">
-                  <h3 class="text-base font-bold text-amber-300 leading-snug">\${qObj.q}</h3>
-                </div>
-                <div class="space-y-3 my-4">
-                  \${qObj.opts.map((opt, idx) => {
-                    let btnStyle = 'bg-black/70 border-amber-500/40 text-white';
-
-                    if (cb.isAnswered) {
-                      if (idx === qObj.a) {
-                        btnStyle = 'bg-emerald-600 border-emerald-400 text-white font-bold ring-2 ring-emerald-300';
-                      } else if (idx === cb.selectedAnswer && cb.selectedAnswer !== qObj.a) {
-                        btnStyle = 'bg-red-600 border-red-400 text-white font-bold';
-                      }
-                    }
-
-                    return \`
-                      <button onclick="handleCareerBootAnswer(\${idx})" \${cb.isAnswered ? 'disabled' : ''} class="w-full p-4 rounded-2xl border text-left text-sm font-semibold transition-all shadow-md \${btnStyle}">
-                        <span class="text-amber-300 font-black mr-2">\${['A','B','C','D'][idx]}.</span> \${opt}
-                      </button>
-                    \`;
-                  }).join('')}
-                </div>
-              </div>
+        } else if (state.currentGame === 'chickenroad') {
+          gameContent = \`
+            <div class="flex-1 flex flex-col items-center justify-center p-6 space-y-4">
+              <input id="ch-target" type="number" step="0.1" value="1.5" class="w-48 p-3 bg-black border border-amber-500 rounded-xl text-center text-white font-mono">
+              <button onclick="playGameAction()" class="w-full max-w-xs gold-gradient text-black font-black py-4 rounded-xl">START CHICKEN RUN 🐔</button>
+            </div>
+          \`;
+        } else {
+          // Universal game layout for all 45+ other games
+          gameContent = \`
+            <div class="flex-1 flex flex-col items-center justify-center p-6 space-y-6">
+              <div class="text-6xl">🎰</div>
+              <div class="text-amber-300 font-bold text-lg">\${gameObj.name}</div>
+              <button onclick="playGameAction('spin')" class="w-full max-w-xs h-14 gold-gradient text-black font-black text-xl rounded-2xl shadow-xl">PLAY ROUND (₹\${state.userBet})</button>
             </div>
           \`;
         }
-      }
 
-      else if (state.currentView === 'pwchange') {
         html = \`
-          <div class="h-full w-full flex flex-col bg-[#120303] p-6 justify-center">
-            <div class="tomato-card p-6 rounded-3xl space-y-4">
-              <h2 class="text-xl font-black text-amber-300 text-center">Change Password</h2>
-              <input id="opw" type="password" placeholder="Old Password" class="w-full p-3 bg-black/60 border border-amber-500/40 rounded-xl text-sm outline-none text-white">
-              <input id="npw" type="password" placeholder="New Password" class="w-full p-3 bg-black/60 border border-amber-500/40 rounded-xl text-sm outline-none text-white">
+          <div class="h-full w-full flex flex-col bg-[#120303]">
+            <div class="h-14 px-3 bg-red-950 border-b border-amber-500/40 flex items-center justify-between">
+              <button onclick="state.view='lobby'; render();" class="px-3 py-1 bg-red-900 rounded-xl text-xs font-bold text-white">Lobby</button>
+              <span class="font-black gold-text">\${gameObj.name}</span>
+              <span class="font-mono text-sm text-green-400 font-bold">₹\${state.user.balance.toFixed(2)}</span>
+            </div>
+            \${gameContent}
+          </div>
+        \`;
+      }
+      else if (state.view === 'admin') {
+        html = \`
+          <div class="h-full w-full flex flex-col bg-[#120303] p-4 overflow-y-auto space-y-4">
+            <div class="flex justify-between items-center border-b border-amber-500/40 pb-2">
+              <h2 class="font-black text-amber-300 text-lg">Admin Control Center</h2>
+              <button onclick="state.view='login'; render();" class="px-3 py-1 bg-red-900 text-xs text-white rounded-lg">Logout</button>
+            </div>
+            <div class="tomato-card p-4 rounded-2xl space-y-3">
+              <h3 class="text-xs font-bold text-amber-300">Add / Minus Player Points by Mobile</h3>
+              <input id="adm-mobile" type="tel" placeholder="Player Mobile Number" class="w-full p-2.5 bg-black/60 border border-amber-500/40 text-xs text-white rounded-xl">
+              <input id="adm-amt" type="number" placeholder="Points Amount" class="w-full p-2.5 bg-black/60 border border-amber-500/40 text-xs text-white rounded-xl">
               <div class="flex gap-2">
-                <button onclick="switchView('lobby')" class="w-1/2 bg-gray-800 text-gray-300 font-bold py-3 rounded-xl text-sm">Cancel</button>
-                <button onclick="changePassword()" class="w-1/2 gold-gradient text-black font-black py-3 rounded-xl text-sm">Update</button>
+                <button onclick="adminModifyBalance('add')" class="w-1/2 bg-emerald-700 text-white font-bold py-2.5 rounded-xl text-xs">Add Points ➕</button>
+                <button onclick="adminModifyBalance('sub')" class="w-1/2 bg-red-700 text-white font-bold py-2.5 rounded-xl text-xs">Deduct Points ➖</button>
               </div>
             </div>
-          </div>
-        \`;
-      }
-
-      else if (state.currentView === 'aviator') {
-        html = \`
-          <div class="h-full w-full flex flex-col bg-[#0b0e14]">
-            <div class="h-14 px-3 bg-[#141822] border-b border-gray-800 flex items-center justify-between shrink-0">
-              <button onclick="switchView('lobby')" class="px-3 py-1 bg-red-900/80 border border-red-500/50 rounded-xl text-xs font-bold text-white">Lobby</button>
-              <span class="font-black text-amber-400 text-sm tracking-wider">AVIATOR 24x7</span>
-              <span class="font-mono text-sm text-green-400 font-bold">₹\${state.user.balance.toFixed(2)}</span>
-            </div>
-            <div class="h-10 px-2 bg-black/60 border-b border-gray-800/80 flex items-center gap-1.5 overflow-x-auto shrink-0 no-scrollbar">
-              \${state.aviator.history.slice(0, 20).map(h => \`<span class="px-2.5 py-0.5 text-[11px] font-mono font-bold rounded-full bg-gray-800 text-purple-300 border border-purple-500/30 shrink-0">\${h}x</span>\`).join('')}
-            </div>
-            <div class="flex-1 relative bg-gradient-to-b from-[#0b0e14] to-[#161c27] flex items-center justify-center overflow-hidden">
-              <canvas id="aviator-canvas" class="absolute inset-0 w-full h-full"></canvas>
-              <div class="relative z-10 flex flex-col items-center text-center space-y-2 pointer-events-none">
-                <div id="aviator-x" class="text-5xl font-black font-mono gold-text">\${state.aviator.currentX.toFixed(2)}x</div>
-                <div id="aviator-status" class="text-xs font-bold px-3 py-1 rounded-full bg-amber-900/80 text-amber-300 border border-amber-500">CONNECTING...</div>
-              </div>
-            </div>
-            <div class="p-4 bg-[#141822] border-t border-gray-800 shrink-0 space-y-3 flex flex-col items-center">
-              \${renderBetControllerUI()}
-              <button id="aviator-btn" onclick="handleAviatorAction()" class="w-full max-w-xs h-14 rounded-2xl font-black text-xl tracking-wider bg-red-600 text-white shadow-lg">
-                BET ₹\${state.userBet}
-              </button>
-            </div>
-          </div>
-        \`;
-      }
-
-      else if (state.currentView === 'guesscorrect') {
-        const diceDots = {
-          1: ['bg-red-500 flex items-center justify-center col-span-3 row-span-3 justify-self-center self-center'],
-          2: ['col-start-1 row-start-1 bg-white', 'col-start-3 row-start-3 bg-white'],
-          3: ['col-start-1 row-start-1 bg-white', 'col-start-2 row-start-2 bg-white', 'col-start-3 row-start-3 bg-white'],
-          4: ['col-start-1 row-start-1 bg-white', 'col-start-3 row-start-1 bg-white', 'col-start-1 row-start-3 bg-white', 'col-start-3 row-start-3 bg-white'],
-          5: ['col-start-1 row-start-1 bg-white', 'col-start-3 row-start-1 bg-white', 'col-start-2 row-start-2 bg-white', 'col-start-1 row-start-3 bg-white', 'col-start-3 row-start-3 bg-white'],
-          6: ['col-start-1 row-start-1 bg-white', 'col-start-3 row-start-1 bg-white', 'col-start-1 row-start-2 bg-white', 'col-start-3 row-start-2 bg-white', 'col-start-1 row-start-3 bg-white', 'col-start-3 row-start-3 bg-white']
-        };
-
-        const renderDice = (val) => \`
-          <div class="w-20 h-20 bg-gradient-to-br from-red-600 to-red-950 border-2 border-amber-400 rounded-2xl shadow-xl grid grid-cols-3 grid-rows-3 p-3 gap-1">
-            \${(diceDots[val] || []).map(cls => \`<div class="w-3.5 h-3.5 rounded-full shadow-inner \${cls}"></div>\`).join('')}
-          </div>
-        \`;
-
-        html = \`
-          <div class="h-full w-full flex flex-col bg-[#120303]">
-            <div class="h-14 px-3 bg-red-950 border-b border-amber-500/40 flex items-center justify-between">
-              <button onclick="switchView('lobby')" class="px-3 py-1 bg-red-900 border border-amber-500/40 rounded-xl text-xs font-bold text-white">Lobby</button>
-              <span class="font-black gold-text">GUESS CORRECT</span>
-              <span class="font-mono text-sm text-green-400 font-bold">₹\${state.user.balance.toFixed(2)}</span>
-            </div>
-            <div class="flex-1 flex flex-col items-center justify-center p-6 space-y-6">
-              <div class="tomato-card p-6 rounded-3xl w-full max-w-xs text-center space-y-3">
-                <div class="flex justify-center gap-6">
-                  \${renderDice(state.diceResults[0])}
-                  \${renderDice(state.diceResults[1])}
-                </div>
-                <p class="text-xs text-amber-200/70 font-bold">Predict Dice Total Sum</p>
-              </div>
-              \${renderBetControllerUI()}
-              <div class="grid grid-cols-2 gap-4 w-full max-w-xs">
-                <button onclick="playDiceGame('small')" class="tomato-card h-16 rounded-2xl flex flex-col items-center justify-center space-y-0.5 active:scale-95">
-                  <span class="font-black text-lg text-amber-300">SMALL</span>
-                  <span class="text-[10px] text-amber-100/60">Sum 2 to 6</span>
-                </button>
-                <button onclick="playDiceGame('big')" class="tomato-card h-16 rounded-2xl flex flex-col items-center justify-center space-y-0.5 active:scale-95">
-                  <span class="font-black text-lg text-amber-300">BIG</span>
-                  <span class="text-[10px] text-amber-100/60">Sum 7 to 12</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        \`;
-      }
-
-      else if (state.currentView === 'prediction') {
-        html = \`
-          <div class="h-full w-full flex flex-col bg-[#0b0404]">
-            <div class="h-14 px-3 bg-red-950 border-b border-amber-500/40 flex items-center justify-between">
-              <button onclick="switchView('lobby')" class="px-3 py-1 bg-red-900/80 border border-amber-500/40 rounded-xl text-xs font-bold text-white">Lobby</button>
-              <span class="font-black gold-text tracking-wider">PREDICTION PRO</span>
-              <span class="font-mono text-sm text-green-400 font-bold">₹\${state.user.balance.toFixed(2)}</span>
-            </div>
-            <div class="flex-1 flex flex-col items-center justify-between p-3 space-y-3">
-              <div class="w-full flex-1 bg-gradient-to-b from-[#090d16] to-[#04060a] border-2 border-emerald-500/30 rounded-3xl relative overflow-hidden flex flex-col p-2 min-h-[280px] shadow-[0_0_20px_rgba(16,185,129,0.15)]">
-                <canvas id="market-canvas" class="absolute inset-0 w-full h-full"></canvas>
-              </div>
-              \${renderBetControllerUI()}
-              <div class="grid grid-cols-2 gap-3 w-full max-w-xs">
-                <button onclick="playPrediction('up')" \${state.predictionTimer > 0 ? 'disabled' : ''} class="h-14 bg-emerald-600 border-2 border-emerald-400 text-white font-black text-lg rounded-2xl shadow-lg active:scale-95 flex items-center justify-center gap-2">
-                  <span>UP ⬆️</span>
-                </button>
-                <button onclick="playPrediction('down')" \${state.predictionTimer > 0 ? 'disabled' : ''} class="h-14 bg-red-600 border-2 border-red-400 text-white font-black text-lg rounded-2xl shadow-lg active:scale-95 flex items-center justify-center gap-2">
-                  <span>DOWN ⬇️</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        \`;
-      }
-
-      else if (state.currentView === 'admin') {
-        html = \`
-          <div class="h-full w-full flex flex-col bg-[#120303]">
-            <div class="h-14 px-3 bg-red-950 border-b border-amber-500/40 flex items-center justify-between">
-              <span class="font-black gold-text">ADMIN PANEL</span>
-              <button onclick="switchView('login')" class="px-3 py-1 bg-red-900 border border-amber-500/40 rounded-xl text-xs font-bold text-white">Logout</button>
-            </div>
-            <div class="flex bg-black/50 p-1 border-b border-amber-500/20">
-              <button onclick="state.adminSubTab='users'; render();" class="w-1/2 py-2 text-xs font-bold \${state.adminSubTab === 'users' ? 'gold-gradient text-black' : 'text-amber-300/60'}\">USERS</button>
-              <button onclick="state.adminSubTab='txns'; render();" class="w-1/2 py-2 text-xs font-bold \${state.adminSubTab === 'txns' ? 'gold-gradient text-black' : 'text-amber-300/60'}\">TRANSACTIONS</button>
-            </div>
-            <div class="flex-1 p-4 overflow-y-auto space-y-4">
-              \${state.adminSubTab === 'users' ? \`
-                <div class="tomato-card p-4 rounded-2xl space-y-2">
-                  <h3 class="text-sm font-bold text-amber-300">Create New Player</h3>
-                  <div class="flex gap-2">
-                    <input id="nu" type="text" placeholder="Username" class="w-1/2 p-2 bg-black/60 border border-amber-500/40 rounded-xl text-xs text-white outline-none">
-                    <input id="np" type="password" placeholder="Password" class="w-1/2 p-2 bg-black/60 border border-amber-500/40 rounded-xl text-xs text-white outline-none">
+            <div class="space-y-2">
+              <h3 class="text-xs font-bold text-amber-300">Pending Deposit & Withdrawal Requests</h3>
+              \${state.adminTxns.map(t => \`
+                <div class="bg-black/60 p-3 rounded-xl border border-amber-500/30 flex justify-between items-center text-xs">
+                  <div>
+                    <div class="font-bold text-amber-300">\${t.name} (\${t.mobile}) - \${t.type.toUpperCase()}</div>
+                    <div class="text-[10px] text-amber-100/70 font-mono">₹\${t.amount} | Details: \${t.details}</div>
                   </div>
-                  <button onclick="createPlayer()" class="w-full gold-gradient text-black font-black py-2 rounded-xl text-xs">Create User</button>
+                  <div class="flex gap-1">
+                    <button onclick="processTxn('\${t._id}', 'approve')" class="px-2 py-1 bg-emerald-700 text-white rounded font-bold">Approve</button>
+                    <button onclick="processTxn('\${t._id}', 'reject')" class="px-2 py-1 bg-red-700 text-white rounded font-bold">Reject</button>
+                  </div>
                 </div>
-                <div class="space-y-2">
-                  \${state.adminUsers.map(u => \`
-                    <div class="bg-black/60 p-3 rounded-2xl border border-amber-500/30 flex justify-between items-center text-xs">
-                      <div>
-                        <div class="font-bold text-amber-300">\${u.username}</div>
-                        <div class="text-[10px] text-green-400 font-mono">₹\${u.balance.toFixed(2)}</div>
-                      </div>
-                      <div class="flex gap-1">
-                        <button onclick="updateBalance('\${u.username}', 100)" class="px-2 py-1 bg-emerald-700 text-white rounded font-bold">+100</button>
-                        <button onclick="updateBalance('\${u.username}', -100)" class="px-2 py-1 bg-red-700 text-white rounded font-bold">-100</button>
-                      </div>
-                    </div>
-                  \`).join('')}
-                </div>
-              \` : \`
-                <div class="space-y-2">
-                  \${state.adminTxns.map(t => \`
-                    <div class="bg-black/60 p-3 rounded-2xl border border-amber-500/30 flex justify-between items-center text-xs">
-                      <div>
-                        <div class="font-bold text-amber-300">\${t.username} (\${t.type.toUpperCase()})</div>
-                        <div class="text-[10px] text-amber-200/70 font-mono">₹\${t.amount} | Status: \${t.status}</div>
-                      </div>
-                      \${t.status === 'pending' ? \`
-                        <div class="flex gap-1">
-                          <button onclick="processTxn('\${t._id}', 'approve')" class="px-2 py-1 bg-emerald-700 text-white rounded font-bold">Approve</button>
-                          <button onclick="processTxn('\${t._id}', 'reject')" class="px-2 py-1 bg-red-700 text-white rounded font-bold">Reject</button>
-                        </div>
-                      \` : ''}
-                    </div>
-                  \`).join('')}
-                </div>
-              \`}
+              \`).join('')}
             </div>
           </div>
         \`;
       }
 
-      app.innerHTML = html + popupHtml + customBetModalHtml;
-
-      if(state.currentView === 'aviator') renderAviatorOverlay();
-      if(state.currentView === 'prediction') renderPredictionGraph();
-      if(state.currentView === 'careerboot' && state.careerboot.stage === 'WHEEL') renderCareerBootWheelCanvas();
+      app.innerHTML = html + popupHtml;
     }
-
     render();
   </script>
 </body>
@@ -2004,9 +724,6 @@ app.get('/', (req, res) => {
   `);
 });
 
-// ==========================================
-// SERVER INITIALIZATION ENGINE
-// ==========================================
 const PORT = process.env.PORT || 10000;
 const MONGO_URI = process.env.MONGODB_URI;
 
@@ -2016,24 +733,20 @@ async function startServer() {
     process.exit(1);
   }
   try {
-    await mongoose.connect(MONGO_URI, { serverSelectionTimeoutMS: 5000 });
-    console.log("MongoDB Connected Successfully");
+    await mongoose.connect(MONGO_URI);
+    console.log("MongoDB Atlas Connected Successfully");
     
-    const boss = await User.findOne({ username: 'Boss' });
-    if (!boss) {
-      const hashedPassword = await bcrypt.hash('BigBoss', 10);
-      await User.create({ username: 'Boss', password: hashedPassword, role: 'admin', balance: 999999 });
-      console.log("Default Admin Account Created: Boss / BigBoss");
+    const admin = await User.findOne({ mobile: '9005041462' });
+    if (!admin) {
+      const hashedPassword = await bcrypt.hash('admin123', 10);
+      await User.create({ name: 'Admin Boss', mobile: '9005041462', password: hashedPassword, role: 'admin', balance: 999999 });
+      console.log("Admin account created: 9005041462 / admin123");
     }
 
-    server.listen(PORT, () => {
-      console.log(`Server running on port ${PORT}`);
-      startAviatorLoop();
-    });
+    server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
   } catch (err) {
-    console.error("Database connection error:", err.message);
+    console.error("Database connection failed:", err.message);
     process.exit(1);
   }
 }
-
 startServer();
