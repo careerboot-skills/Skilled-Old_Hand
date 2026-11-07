@@ -268,20 +268,15 @@ app.get('/', (req, res) => {
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     * { box-sizing: border-box; touch-action: manipulation; }
-    body, html { height: 100%; width: 100%; margin: 0; padding: 0; overflow: hidden; background-color: #0d0202; font-family: ui-sans-serif, system-ui; }
-    .gold-gradient { background: linear-gradient(135deg, #bf953f, #fcf6ba, #b38728, #fbf5b7); }
-    .gold-text { background: linear-gradient(135deg, #bf953f, #fcf6ba, #b38728); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-    .tomato-card { background: linear-gradient(145deg, #800a0a, #360303); border: 2px solid #d4af37; box-shadow: 0 10px 25px rgba(0,0,0,0.8); }
-    .neon-border { box-shadow: 0 0 15px rgba(212, 175, 55, 0.4); }
-    @keyframes slotSpin {
-      0% { transform: translateY(0); }
-      100% { transform: translateY(-240px); }
-    }
-    .slot-spinning { animation: slotSpin 0.1s linear infinite; }
+    body, html { height: 100%; width: 100%; margin: 0; padding: 0; overflow: hidden; background-color: #07090e; font-family: ui-sans-serif, system-ui; }
+    .gold-gradient { background: linear-gradient(135deg, #f59e0b, #fbbf24, #d97706); }
+    .gold-text { background: linear-gradient(135deg, #fef08a, #f59e0b, #fde047); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .glass-card { background: rgba(20, 26, 38, 0.85); backdrop-filter: blur(12px); border: 1px solid rgba(245, 158, 11, 0.3); box-shadow: 0 15px 35px rgba(0,0,0,0.7); }
+    .neon-glow { box-shadow: 0 0 25px rgba(245, 158, 11, 0.25); }
   </style>
 </head>
 <body class="h-full w-full flex items-center justify-center p-0 md:p-4">
-  <div id="app" class="w-full h-full max-w-md max-h-[920px] bg-[#120303] md:rounded-3xl border-0 md:border-2 border-[#d4af37]/40 shadow-2xl flex flex-col relative overflow-hidden"></div>
+  <div id="app" class="w-full h-full max-w-md max-h-[920px] bg-[#0d121f] md:rounded-3xl border-0 md:border-2 border-amber-500/30 shadow-2xl flex flex-col relative overflow-hidden"></div>
 
   <script>
     let state = {
@@ -544,7 +539,7 @@ app.get('/', (req, res) => {
       const h = cvs.height = cvs.clientHeight;
 
       ctx.clearRect(0, 0, w, h);
-      ctx.strokeStyle = '#220a0a';
+      ctx.strokeStyle = '#1a233a';
       ctx.lineWidth = 1;
       for(let x=0; x<w; x+=30) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke(); }
       for(let y=0; y<h; y+=30) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); }
@@ -557,16 +552,16 @@ app.get('/', (req, res) => {
         ctx.beginPath();
         ctx.moveTo(30, h - 30);
         ctx.quadraticCurveTo(w * 0.4, h - 30, endX, endY);
-        ctx.strokeStyle = state.aviator.status === 'CRASHED' ? '#ef4444' : '#eab308';
-        ctx.lineWidth = 4;
+        ctx.strokeStyle = state.aviator.status === 'CRASHED' ? '#ef4444' : '#f59e0b';
+        ctx.lineWidth = 5;
         ctx.stroke();
 
         ctx.lineTo(endX, h - 30); ctx.lineTo(30, h - 30);
-        ctx.fillStyle = state.aviator.status === 'CRASHED' ? 'rgba(239, 68, 68, 0.25)' : 'rgba(234, 179, 8, 0.25)';
+        ctx.fillStyle = state.aviator.status === 'CRASHED' ? 'rgba(239, 68, 68, 0.3)' : 'rgba(245, 158, 11, 0.3)';
         ctx.fill();
 
         ctx.font = '32px sans-serif';
-        ctx.fillText(state.aviator.status === 'CRASHED' ? '💥' : '✈️', endX - 16, endY + 10);
+        ctx.fillText(state.aviator.status === 'CRASHED' ? '💥' : '🚀', endX - 16, endY + 10);
       }
 
       const txt = document.getElementById('aviator-x-text');
@@ -606,7 +601,7 @@ app.get('/', (req, res) => {
       if(track) {
         track.innerHTML = [1,2,3,4,5].map(step => {
           const hasChicken = state.chickenPosition === step;
-          return '<div class="w-12 h-12 rounded-xl flex items-center justify-center font-bold text-lg ' + (hasChicken ? 'bg-amber-400 text-black border-2 border-white scale-110 shadow-lg' : 'bg-red-950 border border-amber-500/30 text-amber-300') + '">' + (hasChicken ? '🐔' : step) + '</div>';
+          return '<div class="w-12 h-12 rounded-xl flex items-center justify-center font-bold text-lg ' + (hasChicken ? 'bg-amber-400 text-black border-2 border-white scale-110 shadow-lg' : 'bg-[#1b263b] border border-amber-500/30 text-amber-300') + '">' + (hasChicken ? '🐔' : step) + '</div>';
         }).join('');
       }
     }
@@ -655,8 +650,8 @@ app.get('/', (req, res) => {
       let html = '';
 
       let popupHtml = state.popup ? 
-        '<div class="absolute inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">' +
-          '<div class="tomato-card p-6 rounded-3xl max-w-xs w-full text-center space-y-4">' +
+        '<div class="absolute inset-0 bg-black/85 z-50 flex items-center justify-center p-4 backdrop-blur-md">' +
+          '<div class="glass-card p-6 rounded-3xl max-w-xs w-full text-center space-y-4">' +
             '<h2 class="text-xl font-black text-amber-300">' + state.popup.msg + '</h2>' +
             '<button onclick="closePopup()" class="w-full gold-gradient text-black font-black py-3 rounded-2xl shadow-xl">' + state.popup.btnText + '</button>' +
           '</div>' +
@@ -664,21 +659,21 @@ app.get('/', (req, res) => {
 
       if (state.view === 'login' || state.view === 'register') {
         const isReg = state.view === 'register';
-        html = '<div class="h-full w-full flex flex-col items-center justify-center p-6 bg-gradient-to-b from-[#2a0404] to-[#0d0202]">' +
-          '<div class="tomato-card p-8 rounded-3xl w-full text-center space-y-5">' +
+        html = '<div class="h-full w-full flex flex-col items-center justify-center p-6 bg-gradient-to-b from-[#141b2d] to-[#07090e]">' +
+          '<div class="glass-card p-8 rounded-3xl w-full text-center space-y-5 neon-glow">' +
             '<div class="text-5xl">👑</div>' +
             '<div>' +
-              '<h1 class="text-2xl font-black gold-text">K³ (Kismat Ka Khel)</h1>' +
-              '<p class="text-xs text-amber-200/70 mt-1">50+ Animated Live Casino Games</p>' +
+              '<h1 class="text-2xl font-black gold-text">K³ EXCHANGE</h1>' +
+              '<p class="text-xs text-amber-200/70 mt-1">High-End Gaming Dashboard</p>' +
             '</div>' +
-            '<div class="flex bg-black/50 p-1 rounded-xl border border-amber-500/30">' +
+            '<div class="flex bg-black/60 p-1 rounded-xl border border-amber-500/30">' +
               '<button onclick="state.view=\\'login\\'; render();" class="w-1/2 py-2 rounded-lg text-xs font-bold ' + (!isReg ? 'gold-gradient text-black' : 'text-amber-300/60') + '">LOGIN</button>' +
               '<button onclick="state.view=\\'register\\'; render();" class="w-1/2 py-2 rounded-lg text-xs font-bold ' + (isReg ? 'gold-gradient text-black' : 'text-amber-300/60') + '">REGISTER</button>' +
             '</div>' +
             '<div class="space-y-3">' +
-              (isReg ? '<input id="auth-name" type="text" placeholder="Full Name" class="w-full p-3.5 rounded-2xl bg-black/60 border border-amber-500/40 text-white text-sm outline-none">' : '') +
-              '<input id="auth-mobile" type="tel" placeholder="Mobile Number" class="w-full p-3.5 rounded-2xl bg-black/60 border border-amber-500/40 text-white text-sm outline-none">' +
-              '<input id="auth-pass" type="password" placeholder="Password" class="w-full p-3.5 rounded-2xl bg-black/60 border border-amber-500/40 text-white text-sm outline-none">' +
+              (isReg ? '<input id="auth-name" type="text" placeholder="Full Name" class="w-full p-3.5 rounded-2xl bg-black/70 border border-amber-500/40 text-white text-sm outline-none">' : '') +
+              '<input id="auth-mobile" type="tel" placeholder="Mobile Number" class="w-full p-3.5 rounded-2xl bg-black/70 border border-amber-500/40 text-white text-sm outline-none">' +
+              '<input id="auth-pass" type="password" placeholder="Password" class="w-full p-3.5 rounded-2xl bg-black/70 border border-amber-500/40 text-white text-sm outline-none">' +
             '</div>' +
             '<button onclick="handleAuth()" class="w-full gold-gradient text-black font-black py-4 rounded-2xl shadow-xl text-md">' + (isReg ? 'CREATE ACCOUNT 🚀' : 'LOGIN TO PLAY 💰') + '</button>' +
             '<button onclick="state.view=\\'forgot\\'; render();" class="text-xs text-amber-300 underline font-semibold">Forgot Password?</button>' +
@@ -686,34 +681,34 @@ app.get('/', (req, res) => {
         '</div>';
       } 
       else if (state.view === 'forgot') {
-        html = '<div class="h-full w-full flex flex-col items-center justify-center p-6 bg-[#120303]">' +
-          '<div class="tomato-card p-6 rounded-3xl w-full space-y-4 text-center">' +
+        html = '<div class="h-full w-full flex flex-col items-center justify-center p-6 bg-[#07090e]">' +
+          '<div class="glass-card p-6 rounded-3xl w-full space-y-4 text-center">' +
             '<h2 class="text-lg font-black text-amber-300">Reset Password</h2>' +
-            '<input id="fg-mobile" type="tel" placeholder="Registered Mobile" class="w-full p-3 bg-black/60 border border-amber-500/40 text-white text-sm rounded-xl">' +
-            '<input id="fg-pass" type="password" placeholder="New Password" class="w-full p-3 bg-black/60 border border-amber-500/40 text-white text-sm rounded-xl">' +
+            '<input id="fg-mobile" type="tel" placeholder="Registered Mobile" class="w-full p-3 bg-black/70 border border-amber-500/40 text-white text-sm rounded-xl">' +
+            '<input id="fg-pass" type="password" placeholder="New Password" class="w-full p-3 bg-black/70 border border-amber-500/40 text-white text-sm rounded-xl">' +
             '<button onclick="handleForgot()" class="w-full gold-gradient text-black font-black py-3 rounded-xl text-sm">Update Password</button>' +
             '<button onclick="state.view=\\'login\\'; render();" class="text-xs text-amber-300">Back to Login</button>' +
           '</div>' +
         '</div>';
       }
       else if (state.view === 'lobby') {
-        html = '<div class="h-full w-full flex flex-col bg-[#120303]">' +
-          '<div class="h-16 px-4 bg-gradient-to-r from-red-950 via-black to-red-950 border-b border-amber-500/40 flex items-center justify-between shadow-lg shrink-0">' +
-            '<span class="font-black text-md gold-text">K³ Khel 👑</span>' +
+        html = '<div class="h-full w-full flex flex-col bg-[#0d121f]">' +
+          '<div class="h-16 px-4 bg-[#141b2d] border-b border-amber-500/30 flex items-center justify-between shadow-lg shrink-0">' +
+            '<span class="font-black text-md gold-text">K³ EXCHANGE 👑</span>' +
             '<div class="flex items-center gap-2">' +
               '<div class="bg-black/60 px-3 py-1.5 rounded-full border border-amber-500/40 flex items-center gap-1">' +
                 '<span class="text-xs text-amber-300 font-bold">₹</span>' +
                 '<span class="text-sm font-mono font-bold text-green-400">' + state.user.balance.toFixed(2) + '</span>' +
               '</div>' +
-              '<button onclick="state.view=\\'login\\'; render();" class="px-2 py-1 bg-red-900/50 rounded-lg text-[10px] text-red-300">Logout</button>' +
+              '<button onclick="state.view=\\'login\\'; render();" class="px-2 py-1 bg-red-950/80 rounded-lg text-[10px] text-red-300">Logout</button>' +
             '</div>' +
           '</div>' +
           '<div class="p-3 bg-black/40 border-b border-amber-500/20 flex gap-3 shrink-0">' +
-            '<button onclick="state.view=\\'deposit\\'; render();" class="w-1/2 py-2.5 bg-emerald-700/80 rounded-xl font-bold text-white text-xs">➕ DEPOSIT</button>' +
-            '<button onclick="state.view=\\'withdraw\\'; render();" class="w-1/2 py-2.5 bg-amber-700/80 rounded-xl font-bold text-white text-xs">💸 WITHDRAW</button>' +
+            '<button onclick="state.view=\\'deposit\\'; render();" class="w-1/2 py-2.5 bg-emerald-600 rounded-xl font-bold text-white text-xs">➕ DEPOSIT</button>' +
+            '<button onclick="state.view=\\'withdraw\\'; render();" class="w-1/2 py-2.5 bg-amber-600 rounded-xl font-bold text-black text-xs">💸 WITHDRAW</button>' +
           '</div>' +
           '<div class="flex-1 p-3 grid grid-cols-2 gap-3 overflow-y-auto">' +
-            GAMES_LIST.map(g => '<button onclick="state.currentGame=\\'' + g.id + '\\'; state.view=\\'game\\'; render();" class="tomato-card p-4 rounded-2xl flex flex-col items-center justify-center text-center space-y-1 active:scale-95">' +
+            GAMES_LIST.map(g => '<button onclick="state.currentGame=\\'' + g.id + '\\'; state.view=\\'game\\'; render();" class="glass-card p-4 rounded-2xl flex flex-col items-center justify-center text-center space-y-1 active:scale-95 hover:border-amber-400">' +
               '<div class="font-black text-amber-300 text-sm">' + g.name + '</div>' +
               '<span class="text-[9px] px-2 py-0.5 bg-black/50 rounded-full text-amber-200/70 border border-amber-500/20">' + g.cat + '</span>' +
             '</button>').join('') +
@@ -721,33 +716,33 @@ app.get('/', (req, res) => {
         '</div>';
       }
       else if (state.view === 'deposit') {
-        html = '<div class="h-full w-full flex flex-col bg-[#120303] p-6 justify-center">' +
-          '<div class="tomato-card p-6 rounded-3xl space-y-4">' +
+        html = '<div class="h-full w-full flex flex-col bg-[#07090e] p-6 justify-center">' +
+          '<div class="glass-card p-6 rounded-3xl space-y-4">' +
             '<div class="flex justify-between items-center border-b border-amber-500/40 pb-2">' +
               '<h2 class="text-lg font-black text-amber-300">Deposit Funds</h2>' +
               '<button onclick="state.view=\\'lobby\\'; render();" class="text-xs text-amber-200">Back</button>' +
             '</div>' +
-            '<div class="bg-black/60 p-3 rounded-xl border border-amber-500/30 text-center">' +
+            '<div class="bg-black/70 p-3 rounded-xl border border-amber-500/30 text-center">' +
               '<span class="text-[11px] text-amber-200/70">Scan or Pay via UPI:</span>' +
               '<div class="text-base font-mono font-black text-amber-300 select-all">9005041462@upi</div>' +
             '</div>' +
-            '<input id="dep-amt" type="number" placeholder="Enter Amount (₹)" class="w-full p-3 bg-black/60 border border-amber-500/40 rounded-xl text-sm text-white">' +
-            '<input id="dep-utr" type="text" placeholder="Transaction / UTR Number" class="w-full p-3 bg-black/60 border border-amber-500/40 rounded-xl text-sm text-white">' +
+            '<input id="dep-amt" type="number" placeholder="Enter Amount (₹)" class="w-full p-3 bg-black/70 border border-amber-500/40 rounded-xl text-sm text-white">' +
+            '<input id="dep-utr" type="text" placeholder="Transaction / UTR Number" class="w-full p-3 bg-black/70 border border-amber-500/40 rounded-xl text-sm text-white">' +
             '<a href="upi://pay?pa=9005041462@upi&pn=K3Khel&am=100&cu=INR" class="block w-full text-center bg-blue-600 font-black py-3 rounded-xl text-white text-xs">📲 OPEN UPI PAYMENT APP</a>' +
             '<button onclick="submitDeposit()" class="w-full gold-gradient text-black font-black py-3 rounded-xl text-xs">Submit Deposit Request</button>' +
           '</div>' +
         '</div>';
       }
       else if (state.view === 'withdraw') {
-        html = '<div class="h-full w-full flex flex-col bg-[#120303] p-6 justify-center">' +
-          '<div class="tomato-card p-6 rounded-3xl space-y-4">' +
+        html = '<div class="h-full w-full flex flex-col bg-[#07090e] p-6 justify-center">' +
+          '<div class="glass-card p-6 rounded-3xl space-y-4">' +
             '<div class="flex justify-between items-center border-b border-amber-500/40 pb-2">' +
               '<h2 class="text-lg font-black text-amber-300">Withdraw Funds</h2>' +
               '<button onclick="state.view=\\'lobby\\'; render();" class="text-xs text-amber-200">Back</button>' +
             '</div>' +
             '<div class="text-xs text-amber-200/80">Available: <span class="font-mono text-green-400 font-bold">₹' + state.user.balance.toFixed(2) + '</span></div>' +
-            '<input id="wd-amt" type="number" placeholder="Amount (₹)" class="w-full p-3 bg-black/60 border border-amber-500/40 rounded-xl text-sm text-white">' +
-            '<input id="wd-bank" type="text" placeholder="UPI ID / Bank Account Details" class="w-full p-3 bg-black/60 border border-amber-500/40 rounded-xl text-sm text-white">' +
+            '<input id="wd-amt" type="number" placeholder="Amount (₹)" class="w-full p-3 bg-black/70 border border-amber-500/40 rounded-xl text-sm text-white">' +
+            '<input id="wd-bank" type="text" placeholder="UPI ID / Bank Account Details" class="w-full p-3 bg-black/70 border border-amber-500/40 rounded-xl text-sm text-white">' +
             '<button onclick="submitWithdraw()" class="w-full bg-amber-600 text-black font-black py-3 rounded-xl text-xs">Request Withdrawal</button>' +
           '</div>' +
         '</div>';
@@ -763,7 +758,7 @@ app.get('/', (req, res) => {
 
         if (state.currentGame === 'aviator') {
           gameContent = '<div class="flex-1 flex flex-col items-center justify-between p-4 space-y-3 relative overflow-hidden">' +
-            '<div class="w-full flex-1 bg-black/90 rounded-2xl border-2 border-amber-500/40 relative flex items-center justify-center overflow-hidden min-h-[200px] neon-border">' +
+            '<div class="w-full flex-1 bg-[#090d16] rounded-2xl border-2 border-amber-500/40 relative flex items-center justify-center overflow-hidden min-h-[200px] neon-glow">' +
               '<canvas id="aviator-canvas" class="absolute inset-0 w-full h-full"></canvas>' +
               '<div id="aviator-x-text" class="relative z-10 text-5xl font-mono font-black gold-text">1.00x</div>' +
             '</div>' +
@@ -772,7 +767,7 @@ app.get('/', (req, res) => {
           '</div>';
         } else if (state.currentGame === 'bigsmall') {
           gameContent = '<div class="flex-1 flex flex-col items-center justify-center p-4 space-y-4">' +
-            '<div class="tomato-card p-5 rounded-3xl w-full text-center space-y-3 neon-border">' +
+            '<div class="glass-card p-5 rounded-3xl w-full text-center space-y-3 neon-glow">' +
               '<div class="flex justify-center gap-6">' +
                 '<div id="dice-1" class="w-16 h-16 bg-gradient-to-br from-red-600 to-red-950 border-2 border-amber-400 rounded-2xl flex items-center justify-center text-3xl font-black text-white shadow-2xl">' + state.diceVisuals[0] + '</div>' +
                 '<div id="dice-2" class="w-16 h-16 bg-gradient-to-br from-red-600 to-red-950 border-2 border-amber-400 rounded-2xl flex items-center justify-center text-3xl font-black text-white shadow-2xl">' + state.diceVisuals[1] + '</div>' +
@@ -781,13 +776,13 @@ app.get('/', (req, res) => {
             '</div>' +
             manualBetBar +
             '<div class="grid grid-cols-2 gap-3 w-full max-w-xs">' +
-              '<button onclick="playGameAction(\\'small\\')" class="tomato-card h-16 rounded-2xl font-black text-amber-300 text-md active:scale-95">SMALL (2-6)</button>' +
-              '<button onclick="playGameAction(\\'big\\')" class="tomato-card h-16 rounded-2xl font-black text-amber-300 text-md active:scale-95">BIG (7-12)</button>' +
+              '<button onclick="playGameAction(\\'small\\')" class="glass-card h-16 rounded-2xl font-black text-amber-300 text-md active:scale-95">SMALL (2-6)</button>' +
+              '<button onclick="playGameAction(\\'big\\')" class="glass-card h-16 rounded-2xl font-black text-amber-300 text-md active:scale-95">BIG (7-12)</button>' +
             '</div>' +
           '</div>';
         } else if (state.currentGame === 'colourguess') {
           gameContent = '<div class="flex-1 flex flex-col items-center justify-between p-4 space-y-3">' +
-            '<div class="w-full flex-1 bg-black/90 rounded-2xl border-2 border-amber-500/40 relative flex flex-col items-center justify-center overflow-hidden min-h-[160px] neon-border">' +
+            '<div class="w-full flex-1 bg-[#090d16] rounded-2xl border-2 border-amber-500/40 relative flex flex-col items-center justify-center overflow-hidden min-h-[160px] neon-glow">' +
               '<div id="colour-curtain" class="absolute inset-0 bg-gradient-to-b from-red-900 to-red-950 flex flex-col items-center justify-center border-b-4 border-amber-500 transition-all duration-700 z-10 space-y-2">' +
                 '<span class="text-4xl animate-bounce">💃</span>' +
                 '<span class="text-xs text-amber-200 font-bold tracking-widest">CHANGING ROOM</span>' +
@@ -801,7 +796,7 @@ app.get('/', (req, res) => {
           '</div>';
         } else if (state.currentGame === 'chickenroad') {
           gameContent = '<div class="flex-1 flex flex-col items-center justify-between p-6 space-y-4">' +
-            '<div class="w-full bg-black/90 p-5 rounded-2xl border-2 border-amber-500/40 flex flex-col items-center space-y-3 neon-border">' +
+            '<div class="w-full bg-[#090d16] p-5 rounded-2xl border-2 border-amber-500/40 flex flex-col items-center space-y-3 neon-glow">' +
               '<span class="text-xs text-amber-300 font-bold">CHICKEN RUNWAY</span>' +
               '<div id="chicken-track" class="w-full flex justify-between items-center"></div>' +
             '</div>' +
@@ -811,7 +806,7 @@ app.get('/', (req, res) => {
           '</div>';
         } else {
           gameContent = '<div class="flex-1 flex flex-col items-center justify-center p-6 space-y-4">' +
-            '<div class="w-full max-w-xs bg-black/90 p-6 rounded-3xl border-2 border-amber-500/40 text-center space-y-4 shadow-2xl neon-border">' +
+            '<div class="w-full max-w-xs bg-[#090d16] p-6 rounded-3xl border-2 border-amber-500/40 text-center space-y-4 shadow-2xl neon-glow">' +
               '<div class="flex justify-center gap-3">' +
                 '<div id="slot-1" class="w-16 h-20 bg-gradient-to-b from-red-900 to-black border-2 border-amber-400 rounded-xl flex items-center justify-center text-3xl shadow-inner">' + state.slotReels[0] + '</div>' +
                 '<div id="slot-2" class="w-16 h-20 bg-gradient-to-b from-red-900 to-black border-2 border-amber-400 rounded-xl flex items-center justify-center text-3xl shadow-inner">' + state.slotReels[1] + '</div>' +
@@ -824,9 +819,9 @@ app.get('/', (req, res) => {
           '</div>';
         }
 
-        html = '<div class="h-full w-full flex flex-col bg-[#120303]">' +
-          '<div class="h-14 px-3 bg-red-950 border-b border-amber-500/40 flex items-center justify-between">' +
-            '<button onclick="state.view=\\'lobby\\'; render();" class="px-3 py-1 bg-red-900 rounded-xl text-xs font-bold text-white">Lobby</button>' +
+        html = '<div class="h-full w-full flex flex-col bg-[#07090e]">' +
+          '<div class="h-14 px-3 bg-[#141b2d] border-b border-amber-500/40 flex items-center justify-between">' +
+            '<button onclick="state.view=\\'lobby\\'; render();" class="px-3 py-1 bg-red-950 rounded-xl text-xs font-bold text-white">Lobby</button>' +
             '<span class="font-black gold-text">' + gameObj.name + '</span>' +
             '<span class="font-mono text-sm text-green-400 font-bold">₹' + state.user.balance.toFixed(2) + '</span>' +
           '</div>' +
@@ -834,30 +829,30 @@ app.get('/', (req, res) => {
         '</div>';
       }
       else if (state.view === 'admin') {
-        html = '<div class="h-full w-full flex flex-col bg-[#120303] p-4 overflow-y-auto space-y-4">' +
+        html = '<div class="h-full w-full flex flex-col bg-[#07090e] p-4 overflow-y-auto space-y-4">' +
           '<div class="flex justify-between items-center border-b border-amber-500/40 pb-2">' +
             '<h2 class="font-black text-amber-300 text-lg">Admin Control Center</h2>' +
-            '<button onclick="state.view=\\'login\\'; render();" class="px-3 py-1 bg-red-900 text-xs text-white rounded-lg">Logout</button>' +
+            '<button onclick="state.view=\\'login\\'; render();" class="px-3 py-1 bg-red-950 text-xs text-white rounded-lg">Logout</button>' +
           '</div>' +
-          '<div class="tomato-card p-4 rounded-2xl space-y-3">' +
+          '<div class="glass-card p-4 rounded-2xl space-y-3">' +
             '<h3 class="text-xs font-bold text-amber-300">Add / Minus Player Points by Mobile</h3>' +
-            '<input id="adm-mobile" type="tel" placeholder="Player Mobile Number" class="w-full p-2.5 bg-black/60 border border-amber-500/40 text-xs text-white rounded-xl">' +
-            '<input id="adm-amt" type="number" placeholder="Points Amount" class="w-full p-2.5 bg-black/60 border border-amber-500/40 text-xs text-white rounded-xl">' +
+            '<input id="adm-mobile" type="tel" placeholder="Player Mobile Number" class="w-full p-2.5 bg-black/70 border border-amber-500/40 text-xs text-white rounded-xl">' +
+            '<input id="adm-amt" type="number" placeholder="Points Amount" class="w-full p-2.5 bg-black/70 border border-amber-500/40 text-xs text-white rounded-xl">' +
             '<div class="flex gap-2">' +
-              '<button onclick="adminModifyBalance(\\'add\\')" class="w-1/2 bg-emerald-700 text-white font-bold py-2.5 rounded-xl text-xs">Add Points ➕</button>' +
-              '<button onclick="adminModifyBalance(\\'sub\\')" class="w-1/2 bg-red-700 text-white font-bold py-2.5 rounded-xl text-xs">Deduct Points ➖</button>' +
+              '<button onclick="adminModifyBalance(\\'add\\')" class="w-1/2 bg-emerald-600 text-white font-bold py-2.5 rounded-xl text-xs">Add Points ➕</button>' +
+              '<button onclick="adminModifyBalance(\\'sub\\')" class="w-1/2 bg-red-600 text-white font-bold py-2.5 rounded-xl text-xs">Deduct Points ➖</button>' +
             '</div>' +
           '</div>' +
           '<div class="space-y-2">' +
             '<h3 class="text-xs font-bold text-amber-300">Pending Deposit & Withdrawal Requests</h3>' +
-            state.adminTxns.map(t => '<div class="bg-black/60 p-3 rounded-xl border border-amber-500/30 flex justify-between items-center text-xs">' +
+            state.adminTxns.map(t => '<div class="bg-black/70 p-3 rounded-xl border border-amber-500/30 flex justify-between items-center text-xs">' +
               '<div>' +
                 '<div class="font-bold text-amber-300">' + t.name + ' (' + t.mobile + ') - ' + t.type.toUpperCase() + '</div>' +
                 '<div class="text-[10px] text-amber-100/70 font-mono">₹' + t.amount + ' | Details: ' + t.details + '</div>' +
               '</div>' +
               '<div class="flex gap-1">' +
-                '<button onclick="processTxn(\\'' + t._id + '\\', \\'approve\\')" class="px-2 py-1 bg-emerald-700 text-white rounded font-bold">Approve</button>' +
-                '<button onclick="processTxn(\\'' + t._id + '\\', \\'reject\\')" class="px-2 py-1 bg-red-700 text-white rounded font-bold">Reject</button>' +
+                '<button onclick="processTxn(\\'' + t._id + '\\', \\'approve\\')" class="px-2 py-1 bg-emerald-600 text-white rounded font-bold">Approve</button>' +
+                '<button onclick="processTxn(\\'' + t._id + '\\', \\'reject\\')" class="px-2 py-1 bg-red-600 text-white rounded font-bold">Reject</button>' +
               '</div>' +
             '</div>').join('') +
           '</div>' +
