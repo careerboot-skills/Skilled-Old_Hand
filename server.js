@@ -39,7 +39,7 @@ const transactionSchema = new mongoose.Schema({
 const Transaction = mongoose.model('Transaction', transactionSchema);
 
 // ==========================================
-// GAME RIGGING & PROBABILITY LOGIC
+// GAME RIGGING LOGIC
 // ==========================================
 let activeAviatorBets = 0;
 
@@ -159,7 +159,9 @@ app.post('/api/play-game', async (req, res) => {
     const isBigChoice = String(choice).toLowerCase() === 'big';
     won = false;
     multiplier = 0;
-    resultMeta = { sum: isBigChoice ? 5 : 9, result: isBigChoice ? 'SMALL' : 'BIG' };
+    const d1 = isBigChoice ? 2 : 4;
+    const d2 = isBigChoice ? 3 : 5;
+    resultMeta = { dice1: d1, dice2: d2, sum: d1 + d2, result: isBigChoice ? 'SMALL' : 'BIG' };
   } 
   else if (game === 'colourguess') {
     const outcomeColor = getColorGuessResult();
@@ -170,16 +172,18 @@ app.post('/api/play-game', async (req, res) => {
   else if (game === 'candycrash') {
     won = Math.random() < 0.05; 
     multiplier = won ? 1.5 : 0;
+    resultMeta = { grid: ['🍬','🍭','🍫','🍩','🍇','🍉','🍬','🍬','🍬'] };
   } 
   else if (game === 'chickenroad') {
     const targetPoint = parseFloat(choice.targetPoint) || 1.5;
     won = targetPoint < 2.0; 
     multiplier = won ? targetPoint : 0;
+    resultMeta = { reachedStep: won ? 4 : 2 };
   } 
   else {
     won = Math.random() < 0.25;
     multiplier = won ? 2.0 : 0;
-    resultMeta = { message: won ? 'Victory!' : 'Defeat' };
+    resultMeta = { symbols: won ? ['🎰','🎰','🎰'] : ['🎰','🍋','🍒'] };
   }
 
   const winPayout = won ? +(numBet * multiplier).toFixed(2) : 0;
@@ -251,7 +255,7 @@ app.post('/api/admin/process-txn', async (req, res) => {
 });
 
 // ==========================================
-// EMBEDDED FRONTEND (50+ GAMES SUITE)
+// EMBEDDED VISUAL FRONTEND ENGINE
 // ==========================================
 app.get('/', (req, res) => {
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
@@ -270,6 +274,17 @@ app.get('/', (req, res) => {
     .tomato-card { background: linear-gradient(145deg, #800a0a, #360303); border: 2px solid #d4af37; box-shadow: 0 10px 25px rgba(0,0,0,0.8); }
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    
+    @keyframes spinReel {
+      0% { transform: translateY(0); }
+      100% { transform: translateY(-300px); }
+    }
+    .animate-spin-reel { animation: spinReel 0.15s linear infinite; }
+    @keyframes pulseGlow {
+      0%, 100% { opacity: 0.3; }
+      50% { opacity: 0.8; }
+    }
+    .animate-pulse-glow { animation: pulseGlow 1.5s ease-in-out infinite; }
   </style>
 </head>
 <body class="h-full w-full flex items-center justify-center p-0 md:p-4">
@@ -279,13 +294,18 @@ app.get('/', (req, res) => {
     let state = {
       user: null,
       view: 'login',
-      authTab: 'login',
       currentGame: null,
       userBet: 100,
       popup: null,
       aviator: { status: 'WAITING', currentX: 1.00 },
       hasBetAviator: false,
-      adminTxns: []
+      adminTxns: [],
+      animating: false,
+      diceVisuals: [1, 1],
+      colourReveal: null,
+      curtainOpen: false,
+      slotSymbols: ['🎰', '🎰', '🎰'],
+      chickenPosition: 0
     };
 
     const GAMES_LIST = [
@@ -346,7 +366,9 @@ app.get('/', (req, res) => {
       if (data.type === 'AVIATOR_STATE') {
         state.aviator = data;
         if (data.status === 'WAITING') state.hasBetAviator = false;
-        if (state.view === 'game' && state.currentGame === 'aviator') render();
+        if (state.view === 'game' && state.currentGame === 'aviator') {
+          renderAviatorCanvas();
+        }
       }
     };
 
@@ -429,10 +451,32 @@ app.get('/', (req, res) => {
     }
 
     async function playGameAction(choiceData) {
+      if(state.animating) return;
+      if(state.user.balance < state.userBet) return showPopup('Insufficient Balance');
+
+      state.animating = true;
       const gameId = state.currentGame;
       let choice = choiceData;
       if (gameId === 'chickenroad') {
-        choice = { targetPoint: document.getElementById('ch-target').value };
+        choice = { targetPoint: document.getElementById('ch-target') ? document.getElementById('ch-target').value : 1.5 };
+      }
+
+      // Visual animations before fetching server outcome
+      if (gameId === 'bigsmall') {
+        let count = 0;
+        let rollInterval = setInterval(() => {
+          state.diceVisuals = [Math.floor(Math.random()*6)+1, Math.floor(Math.random()*6)+1];
+          renderDiceUI();
+          count++;
+          if (count > 12) clearInterval(rollInterval);
+        }, 80);
+      } else if (gameId === 'colourguess') {
+        state.curtainOpen = false;
+        state.colourReveal = null;
+        renderColourStage();
+      } else if (gameId === 'chickenroad') {
+        state.chickenPosition = 0;
+        renderChickenRoadCanvas();
       }
 
       const res = await fetch('/api/play-game', {
@@ -440,17 +484,36 @@ app.get('/', (req, res) => {
         body: JSON.stringify({ mobile: state.user.mobile, game: gameId, betAmount: state.userBet, choice })
       });
       const data = await res.json();
-      if (res.ok) {
-        state.user.balance = data.newBalance;
-        render();
-        if (data.won) {
-          showPopup('🎉 YOU WON ₹' + (state.userBet * data.multiplier).toFixed(2) + ' (' + data.multiplier + 'x)!');
+
+      setTimeout(() => {
+        state.animating = false;
+        if (res.ok) {
+          state.user.balance = data.newBalance;
+          
+          if (gameId === 'bigsmall') {
+            state.diceVisuals = [data.resultMeta.dice1, data.resultMeta.dice2];
+            renderDiceUI();
+          } else if (gameId === 'colourguess') {
+            state.colourReveal = data.resultMeta.color;
+            state.curtainOpen = true;
+            renderColourStage();
+          } else if (gameId === 'chickenroad') {
+            state.chickenPosition = data.resultMeta.reachedStep;
+            renderChickenRoadCanvas();
+          }
+
+          setTimeout(() => {
+            if (data.won) {
+              showPopup('🎉 YOU WON ₹' + (state.userBet * data.multiplier).toFixed(2) + ' (' + data.multiplier + 'x)!');
+            } else {
+              showPopup('💥 YOU LOST ₹' + state.userBet + '. Better luck next time!');
+            }
+          }, 600);
+
         } else {
-          showPopup('💥 YOU LOST ₹' + state.userBet + '. Better luck next time!');
+          showPopup(data.error);
         }
-      } else {
-        showPopup(data.error);
-      }
+      }, gameId === 'bigsmall' || gameId === 'colourguess' ? 1200 : 500);
     }
 
     async function handleAviatorBet() {
@@ -459,6 +522,80 @@ app.get('/', (req, res) => {
       state.hasBetAviator = true;
       state.user.balance -= state.userBet;
       render();
+    }
+
+    function renderAviatorCanvas() {
+      const cvs = document.getElementById('aviator-canvas');
+      if(!cvs) return;
+      const ctx = cvs.getContext('2d');
+      const w = cvs.width = cvs.clientWidth;
+      const h = cvs.height = cvs.clientHeight;
+
+      ctx.clearRect(0, 0, w, h);
+      ctx.strokeStyle = '#222';
+      for(let x=0; x<w; x+=30) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke(); }
+      for(let y=0; y<h; y+=30) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); }
+
+      if(state.aviator.status === 'FLYING' || state.aviator.status === 'CRASHED') {
+        const progress = Math.min((state.aviator.currentX - 1) / 5, 1);
+        const endX = 30 + (w - 70) * progress;
+        const endY = (h - 30) - (h - 70) * Math.pow(progress, 0.8);
+
+        ctx.beginPath();
+        ctx.moveTo(30, h - 30);
+        ctx.quadraticCurveTo(w * 0.3, h - 30, endX, endY);
+        ctx.strokeStyle = state.aviator.status === 'CRASHED' ? '#ef4444' : '#eab308';
+        ctx.lineWidth = 4;
+        ctx.stroke();
+
+        ctx.lineTo(endX, h - 30); ctx.lineTo(30, h - 30);
+        ctx.fillStyle = state.aviator.status === 'CRASHED' ? 'rgba(239, 68, 68, 0.2)' : 'rgba(234, 179, 8, 0.2)';
+        ctx.fill();
+
+        ctx.font = '28px sans-serif';
+        ctx.fillText(state.aviator.status === 'CRASHED' ? '💥' : '🚀', endX - 14, endY + 8);
+      }
+
+      const txt = document.getElementById('aviator-x-text');
+      if(txt) {
+        txt.innerText = state.aviator.currentX.toFixed(2) + 'x';
+        txt.className = 'text-4xl font-mono font-black ' + (state.aviator.status === 'CRASHED' ? 'text-red-500' : 'gold-text');
+      }
+    }
+
+    function renderDiceUI() {
+      const d1 = document.getElementById('dice-1');
+      const d2 = document.getElementById('dice-2');
+      if(d1 && d2) {
+        d1.innerText = state.diceVisuals[0];
+        d2.innerText = state.diceVisuals[1];
+      }
+    }
+
+    function renderColourStage() {
+      const curtain = document.getElementById('colour-curtain');
+      const reveal = document.getElementById('colour-reveal-tag');
+      if(curtain && reveal) {
+        if(state.curtainOpen && state.colourReveal) {
+          curtain.style.transform = 'translateY(-100%)';
+          reveal.innerText = state.colourReveal.toUpperCase();
+          reveal.style.backgroundColor = state.colourReveal.toLowerCase() === 'white' ? '#fff' : state.colourReveal.toLowerCase();
+          reveal.style.color = state.colourReveal.toLowerCase() === 'white' || state.colourReveal.toLowerCase() === 'yellow' ? '#000' : '#fff';
+        } else {
+          curtain.style.transform = 'translateY(0)';
+          reveal.innerText = '???';
+        }
+      }
+    }
+
+    function renderChickenRoadCanvas() {
+      const track = document.getElementById('chicken-track');
+      if(track) {
+        track.innerHTML = [1,2,3,4,5].map(step => {
+          const hasChicken = state.chickenPosition === step;
+          return '<div class="w-12 h-12 rounded-xl flex items-center justify-center font-bold text-lg ' + (hasChicken ? 'bg-amber-400 text-black border-2 border-white animate-bounce' : 'bg-red-950 border border-amber-500/30 text-amber-300') + '">' + (hasChicken ? '🐔' : step) + '</div>';
+        }).join('');
+      }
     }
 
     async function submitDeposit() {
@@ -508,7 +645,7 @@ app.get('/', (req, res) => {
             '<div class="text-5xl">👑</div>' +
             '<div>' +
               '<h1 class="text-2xl font-black gold-text">K³ (Kismat Ka Khel)</h1>' +
-              '<p class="text-xs text-amber-200/70 mt-1">50+ Ultimate Casino & Betting Games</p>' +
+              '<p class="text-xs text-amber-200/70 mt-1">50+ Animated Live Casino Games</p>' +
             '</div>' +
             '<div class="flex bg-black/50 p-1 rounded-xl border border-amber-500/30">' +
               '<button onclick="state.view=\\'login\\'; render();" class="w-1/2 py-2 rounded-lg text-xs font-bold ' + (!isReg ? 'gold-gradient text-black' : 'text-amber-300/60') + '">LOGIN</button>' +
@@ -596,15 +733,21 @@ app.get('/', (req, res) => {
         let gameContent = '';
 
         if (state.currentGame === 'aviator') {
-          gameContent = '<div class="flex-1 flex flex-col items-center justify-center p-4 space-y-4">' +
-            '<div class="text-4xl font-mono font-black gold-text">' + state.aviator.currentX.toFixed(2) + 'x</div>' +
-            '<div class="text-xs font-bold px-3 py-1 rounded-full bg-amber-900/80 text-amber-300">' + state.aviator.status + '</div>' +
-            '<button onclick="handleAviatorBet()" ' + (state.hasBetAviator ? 'disabled' : '') + ' class="w-full max-w-xs h-14 rounded-2xl font-black text-xl gold-gradient text-black">' + (state.hasBetAviator ? 'BET PLACED' : 'PLACE BET ₹' + state.userBet) + '</button>' +
+          gameContent = '<div class="flex-1 flex flex-col items-center justify-between p-4 space-y-3 relative overflow-hidden">' +
+            '<div class="w-full flex-1 bg-black/80 rounded-2xl border border-amber-500/30 relative flex items-center justify-center overflow-hidden min-h-[260px]">' +
+              '<canvas id="aviator-canvas" class="absolute inset-0 w-full h-full"></canvas>' +
+              '<div id="aviator-x-text" class="relative z-10 text-4xl font-mono font-black gold-text">1.00x</div>' +
+            '</div>' +
+            '<button onclick="handleAviatorBet()" ' + (state.hasBetAviator ? 'disabled' : '') + ' class="w-full max-w-xs h-14 rounded-2xl font-black text-xl gold-gradient text-black shadow-lg">' + (state.hasBetAviator ? 'BET PLACED 🚀' : 'PLACE BET ₹' + state.userBet) + '</button>' +
           '</div>';
         } else if (state.currentGame === 'bigsmall') {
-          gameContent = '<div class="flex-1 flex flex-col items-center justify-center p-6 space-y-4">' +
-            '<div class="tomato-card p-6 rounded-3xl w-full text-center">' +
-              '<p class="text-xs text-amber-200">Guess the Sum of 2 Dices</p>' +
+          gameContent = '<div class="flex-1 flex flex-col items-center justify-center p-6 space-y-6">' +
+            '<div class="tomato-card p-6 rounded-3xl w-full text-center space-y-4">' +
+              '<div class="flex justify-center gap-6">' +
+                '<div id="dice-1" class="w-20 h-20 bg-red-800 border-2 border-amber-400 rounded-2xl flex items-center justify-center text-4xl font-black text-white shadow-xl">' + state.diceVisuals[0] + '</div>' +
+                '<div id="dice-2" class="w-20 h-20 bg-red-800 border-2 border-amber-400 rounded-2xl flex items-center justify-center text-4xl font-black text-white shadow-xl">' + state.diceVisuals[1] + '</div>' +
+              '</div>' +
+              '<p class="text-xs text-amber-200">Predict Sum (2-6 Small | 7-12 Big)</p>' +
             '</div>' +
             '<div class="grid grid-cols-2 gap-4 w-full max-w-xs">' +
               '<button onclick="playGameAction(\\'small\\')" class="tomato-card h-20 rounded-2xl font-black text-amber-300 text-lg">SMALL (2-6)</button>' +
@@ -612,22 +755,30 @@ app.get('/', (req, res) => {
             '</div>' +
           '</div>';
         } else if (state.currentGame === 'colourguess') {
-          gameContent = '<div class="flex-1 flex flex-col items-center justify-center p-4 space-y-3">' +
-            '<div class="text-xs text-amber-300 font-bold">Select Colour (Red 15%, White 15%, Green 20%, Black 20%, Yellow 15%, Blue 20%)</div>' +
-            '<div class="grid grid-cols-3 gap-3 w-full max-w-xs">' +
-              ['Red','White','Green','Black','Yellow','Blue'].map(c => '<button onclick="playGameAction(\\'' + c + '\\')" class="p-4 rounded-xl font-bold text-black gold-gradient">' + c + '</button>').join('') +
+          gameContent = '<div class="flex-1 flex flex-col items-center justify-between p-4 space-y-3">' +
+            '<div class="w-full flex-1 bg-black/80 rounded-2xl border border-amber-500/30 relative flex flex-col items-center justify-center overflow-hidden min-h-[220px]">' +
+              '<div id="colour-curtain" class="absolute inset-0 bg-red-950 flex items-center justify-center border-b-4 border-amber-500 transition-all duration-700 z-10">' +
+                '<span class="text-4xl">💃</span>' +
+              '</div>' +
+              '<div id="colour-reveal-tag" class="w-24 h-24 rounded-full border-4 border-amber-400 flex items-center justify-center font-black text-lg shadow-2xl bg-amber-500 text-black">???</div>' +
+            '</div>' +
+            '<div class="grid grid-cols-3 gap-2 w-full max-w-xs">' +
+              ['Red','White','Green','Black','Yellow','Blue'].map(c => '<button onclick="playGameAction(\\'' + c + '\\')" class="p-3.5 rounded-xl font-bold text-black gold-gradient text-xs">' + c + '</button>').join('') +
             '</div>' +
           '</div>';
         } else if (state.currentGame === 'chickenroad') {
-          gameContent = '<div class="flex-1 flex flex-col items-center justify-center p-6 space-y-4">' +
+          gameContent = '<div class="flex-1 flex flex-col items-center justify-between p-6 space-y-4">' +
+            '<div id="chicken-track" class="w-full bg-black/80 p-4 rounded-2xl border border-amber-500/30 flex justify-between items-center"></div>' +
             '<input id="ch-target" type="number" step="0.1" value="1.5" class="w-48 p-3 bg-black border border-amber-500 rounded-xl text-center text-white font-mono">' +
-            '<button onclick="playGameAction()" class="w-full max-w-xs gold-gradient text-black font-black py-4 rounded-xl">START CHICKEN RUN 🐔</button>' +
+            '<button onclick="playGameAction()" class="w-full max-w-xs gold-gradient text-black font-black py-4 rounded-xl text-lg shadow-xl">START RUN 🐔</button>' +
           '</div>';
         } else {
           gameContent = '<div class="flex-1 flex flex-col items-center justify-center p-6 space-y-6">' +
-            '<div class="text-6xl">🎰</div>' +
-            '<div class="text-amber-300 font-bold text-lg">' + gameObj.name + '</div>' +
-            '<button onclick="playGameAction(\\'spin\\')" class="w-full max-w-xs h-14 gold-gradient text-black font-black text-xl rounded-2xl shadow-xl">PLAY ROUND (₹' + state.userBet + ')</button>' +
+            '<div class="w-full max-w-xs bg-black/80 p-6 rounded-3xl border border-amber-500/30 text-center space-y-3 shadow-2xl">' +
+              '<div class="text-6xl animate-pulse">🎰</div>' +
+              '<div class="text-amber-300 font-bold text-lg">' + gameObj.name + '</div>' +
+            '</div>' +
+            '<button onclick="playGameAction(\\'spin\\')" class="w-full max-w-xs h-14 gold-gradient text-black font-black text-xl rounded-2xl shadow-xl">SPIN & PLAY (₹' + state.userBet + ')</button>' +
           '</div>';
         }
 
@@ -672,6 +823,11 @@ app.get('/', (req, res) => {
       }
 
       app.innerHTML = html + popupHtml;
+
+      if(state.view === 'game') {
+        if(state.currentGame === 'aviator') renderAviatorCanvas();
+        if(state.currentGame === 'chickenroad') renderChickenRoadCanvas();
+      }
     }
     render();
   </script>
