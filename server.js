@@ -21,6 +21,7 @@ const userSchema = new mongoose.Schema({
   password: { type: String, required: true },
   role: { type: String, enum: ['admin', 'player'], default: 'player' },
   balance: { type: Number, default: 0 },
+  totalBetsCount: { type: Number, default: 0 },
   totalWon: { type: Number, default: 0 },
   totalLost: { type: Number, default: 0 },
   createdAt: { type: Date, default: Date.now }
@@ -39,10 +40,11 @@ const transactionSchema = new mongoose.Schema({
 const Transaction = mongoose.model('Transaction', transactionSchema);
 
 // ==========================================
-// GAME RIGGING & WEBSOCKET ENGINE
+// GAME RIGGING & WEBSOCKET ENGINES
 // ==========================================
 let activeAviatorBets = 0;
 let aviatorState = { status: 'WAITING', currentX: 1.00, crashX: 1.00 };
+const winningBetMilestones = [18, 37, 49, 68, 93, 127, 155, 175, 199, 228, 256, 278, 301, 333, 375, 400];
 
 function broadcast(data) {
   wss.clients.forEach(client => {
@@ -57,7 +59,12 @@ function runAviatorLoop() {
 
   setTimeout(() => {
     const hasBet = activeAviatorBets > 0;
-    aviatorState.crashX = hasBet ? +(1.00 + Math.random() * 0.43).toFixed(2) : +(5.00 + Math.random() * 15.00).toFixed(2);
+    if (!hasBet) {
+      aviatorState.crashX = +(1.00 + Math.random() * 199.50).toFixed(2);
+    } else {
+      // Checked against user bet milestones in play route or general toggle
+      aviatorState.crashX = +(1.00 + Math.random() * 0.36).toFixed(2);
+    }
     aviatorState.status = 'FLYING';
 
     let startTime = Date.now();
@@ -82,7 +89,7 @@ function runAviatorLoop() {
 runAviatorLoop();
 
 // ==========================================
-// REST APIS
+// HTTP APIS
 // ==========================================
 app.post('/api/register', async (req, res) => {
   const { name, mobile, password } = req.body;
@@ -119,52 +126,90 @@ app.post('/api/play-game', async (req, res) => {
   const numBet = parseFloat(betAmount);
   if (isNaN(numBet) || numBet <= 0) return res.status(400).json({ error: 'Invalid Bet Amount' });
 
-  const user = await User.findOneAndUpdate(
-    { mobile, balance: { $gte: numBet } },
-    { $inc: { balance: -numBet } },
-    { new: true }
-  );
-  if (!user) return res.status(400).json({ error: 'Insufficient Balance' });
+  const user = await User.findOne({ mobile });
+  if (!user || user.balance < numBet) return res.status(400).json({ error: 'Insufficient Balance' });
+
+  user.balance -= numBet;
+  user.totalBetsCount += 1;
 
   let won = false;
   let multiplier = 0;
   let resultMeta = {};
 
-  if (game === 'bigsmall') {
-    const isBigChoice = String(choice).toLowerCase() === 'big';
+  if (game === 'aviator') {
+    const isMilestone = winningBetMilestones.includes(user.totalBetsCount);
+    const crashMultiplier = isMilestone ? +(2.30 + Math.random() * (7.09 - 2.30)).toFixed(2) : +(1.00 + Math.random() * 0.36).toFixed(2);
+    const playerCashedOutAt = parseFloat(choice?.cashoutX) || 1.10;
+    
+    if (playerCashedOutAt <= crashMultiplier) {
+      won = true;
+      multiplier = playerCashedOutAt;
+    } else {
+      won = false;
+      multiplier = 0;
+    }
+    resultMeta = { crashX: crashMultiplier };
+  }
+  else if (game === 'bigsmall') {
+    const isPlayerChoiceBig = String(choice).toLowerCase() === 'big';
     won = false;
     multiplier = 0;
-    const d1 = isBigChoice ? 2 : 4;
-    const d2 = isBigChoice ? 3 : 5;
-    resultMeta = { dice1: d1, dice2: d2, sum: d1 + d2, result: isBigChoice ? 'SMALL' : 'BIG' };
-  } 
-  else if (game === 'colourguess') {
-    const colors = ['Red', 'White', 'Green', 'Black', 'Yellow', 'Blue'];
-    const outcomeColor = colors[Math.floor(Math.random() * colors.length)];
-    won = String(choice).toLowerCase() === outcomeColor.toLowerCase();
-    multiplier = won ? 3.5 : 0;
-    resultMeta = { color: outcomeColor };
-  } 
+    let d1, d2;
+    if (isPlayerChoiceBig) {
+      d1 = Math.floor(Math.random() * 3) + 1; // 1, 2, 3
+      d2 = Math.floor(Math.random() * 3) + 1; // 1, 2, 3 -> sum 2 to 6 (Small)
+    } else {
+      d1 = Math.floor(Math.random() * 3) + 4; // 4, 5, 6
+      d2 = Math.floor(Math.random() * 3) + 4; // 4, 5, 6 -> sum 8 to 12 (Big)
+    }
+    const sum = d1 + d2;
+    resultMeta = { dice1: d1, dice2: d2, sum, result: sum <= 6 ? 'SMALL' : 'BIG' };
+  }
   else if (game === 'chickenroad') {
-    const targetPoint = parseFloat(choice?.targetPoint) || 1.5;
-    won = targetPoint < 2.0; 
-    multiplier = won ? targetPoint : 0;
-    resultMeta = { reachedStep: won ? 4 : 2 };
-  } 
-  else {
-    won = Math.random() < 0.25;
-    multiplier = won ? 2.0 : 0;
-    resultMeta = { symbols: won ? ['💎','💎','💎'] : ['🍒','🍋','🔔'] };
+    const step = parseInt(choice?.step) || 1;
+    const multipliers = { 1: 1.05, 2: 1.50, 3: 2.00, 4: 2.50, 5: 3.00 };
+    won = Math.random() < 0.35; // Controlled progression
+    multiplier = won ? multipliers[step] : 0;
+    resultMeta = { step, success: won };
+  }
+  else if (game === 'colourguess') {
+    const colors = ['White', 'Green', 'Black', 'Yellow', 'Blue'];
+    const winningColor = colors[Math.floor(Math.random() * colors.length)];
+    won = String(choice).toLowerCase() === winningColor.toLowerCase();
+    multiplier = won ? 4.5 : 0;
+    resultMeta = { winningColor, eliminated: colors.filter(c => c !== winningColor) };
+  }
+  else if (game === 'andarbahar') {
+    const chosenSide = String(choice).toLowerCase(); // 'andar' or 'bahar'
+    const winningSide = Math.random() < 0.45 ? chosenSide : (chosenSide === 'andar' ? 'bahar' : 'andar');
+    won = winningSide === chosenSide;
+    multiplier = won ? 1.95 : 0;
+    resultMeta = { winningSide, card: '7 of Spades' };
+  }
+  else if (game === 'graphprediction') {
+    const prediction = String(choice).toLowerCase(); // 'up' or 'down'
+    const actual = Math.random() > 0.5 ? 'up' : 'down';
+    won = prediction === actual;
+    multiplier = won ? 1.90 : 0;
+    resultMeta = { actualDirection: actual, finalMultiplier: +(1.5 + Math.random() * 3).toFixed(2) };
+  }
+  else if (game === 'wheelspin') {
+    const sectors = [0, 1.2, 2.0, 0, 5.0, 1.5, 0, 10.0];
+    multiplier = sectors[Math.floor(Math.random() * sectors.length)];
+    won = multiplier > 0;
+    resultMeta = { multiplier };
   }
 
   const winPayout = won ? +(numBet * multiplier).toFixed(2) : 0;
-  const updatedUser = await User.findOneAndUpdate(
-    { mobile },
-    { $inc: { balance: winPayout, totalWon: winPayout, totalLost: won ? 0 : numBet } },
-    { new: true }
-  );
+  user.balance += winPayout;
+  if (won) {
+    user.totalWon += winPayout;
+  } else {
+    user.totalLost += numBet;
+  }
+  await user.save();
 
-  res.json({ won, multiplier, newBalance: updatedUser.balance, resultMeta });
+  res.json({ won, multiplier, newBalance: user.balance, resultMeta });
 });
 
 app.post('/api/aviator/register-bet', (req, res) => {
@@ -183,12 +228,10 @@ app.post('/api/deposit-request', async (req, res) => {
 app.post('/api/withdraw-request', async (req, res) => {
   const { mobile, amount, bankDetails } = req.body;
   const numAmt = parseFloat(amount);
-  const user = await User.findOneAndUpdate(
-    { mobile, balance: { $gte: numAmt } },
-    { $inc: { balance: -numAmt } },
-    { new: true }
-  );
-  if (!user) return res.status(400).json({ error: 'Insufficient Balance' });
+  const user = await User.findOne({ mobile });
+  if (!user || user.balance < numAmt) return res.status(400).json({ error: 'Insufficient Balance' });
+  user.balance -= numAmt;
+  await user.save();
   await Transaction.create({ mobile, name: user.name, type: 'withdrawal', amount: numAmt, details: bankDetails });
   res.json({ success: true, newBalance: user.balance, message: 'Withdrawal request sent to Admin!' });
 });
@@ -200,13 +243,10 @@ app.get('/api/admin/pending-txns', async (req, res) => {
 
 app.post('/api/admin/update-balance', async (req, res) => {
   const { mobile, amount } = req.body;
-  const numAmt = parseFloat(amount);
-  const user = await User.findOneAndUpdate(
-    { mobile },
-    { $inc: { balance: numAmt } },
-    { new: true }
-  );
+  const user = await User.findOne({ mobile });
   if (!user) return res.status(404).json({ error: 'Player Mobile not found' });
+  user.balance += parseFloat(amount);
+  await user.save();
   res.json({ success: true, newBalance: user.balance, name: user.name });
 });
 
@@ -226,7 +266,7 @@ app.post('/api/admin/process-txn', async (req, res) => {
 });
 
 // ==========================================
-// HIGH-PERFORMANCE EMBEDDED FRONTEND
+// HIGH-END CLIENT FRONTEND
 // ==========================================
 app.get('/', (req, res) => {
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
@@ -261,62 +301,19 @@ app.get('/', (req, res) => {
       adminTxns: [],
       animating: false,
       diceVisuals: [3, 4],
-      colourReveal: null,
-      curtainOpen: false,
-      chickenPosition: 1,
-      slotReels: ['💎', '7️⃣', '🔔']
+      chickenStep: 1,
+      andarCard: 'A ♠',
+      wheelDeg: 0
     };
 
     const GAMES_LIST = [
       { id: 'aviator', name: 'Aviator 🚀', cat: 'Crash' },
-      { id: 'bigsmall', name: 'Big / Small Dice 🎲', cat: 'Table' },
-      { id: 'colourguess', name: 'Colour Guess 💋', cat: 'Live' },
-      { id: 'candycrash', name: 'Candy Crash 🍬', cat: 'Slots' },
+      { id: 'bigsmall', name: 'Big / Small 🎲', cat: 'Table' },
       { id: 'chickenroad', name: 'Chicken Road 🐔', cat: 'Arcade' },
-      { id: 'plinko', name: 'Plinko Gold 🟡', cat: 'Arcade' },
-      { id: 'mines', name: 'Minesweeper 💣', cat: 'Arcade' },
-      { id: 'limbo', name: 'Limbo X ⚡', cat: 'Crash' },
-      { id: 'dice', name: 'Lucky Dice ⚀', cat: 'Table' },
-      { id: 'roulette', name: 'European Roulette 🎡', cat: 'Table' },
-      { id: 'blackjack', name: 'Classic Blackjack 🃏', cat: 'Cards' },
-      { id: 'baccarat', name: 'Speed Baccarat 🎴', cat: 'Cards' },
-      { id: 'teenpatti', name: 'Indian Teen Patti 👑', cat: 'Cards' },
+      { id: 'colourguess', name: 'Colour Guess 💋', cat: 'Live' },
       { id: 'andarbahar', name: 'Andar Bahar 🎴', cat: 'Cards' },
-      { id: 'slots777', name: '777 Deluxe Slots 🎰', cat: 'Slots' },
-      { id: 'fruitparty', name: 'Fruit Party Slots 🍒', cat: 'Slots' },
-      { id: 'dragontiger', name: 'Dragon Tiger 🐉', cat: 'Cards' },
-      { id: 'wheeloffortune', name: 'Wheel of Fortune 🎡', cat: 'Live' },
-      { id: 'keno', name: 'Lucky Keno 🔢', cat: 'Lottery' },
-      { id: 'scratchcard', name: 'Golden Scratch 🎫', cat: 'Lottery' },
-      { id: 'bullbull', name: 'Bull Bull 🐂', cat: 'Cards' },
-      { id: 'fishing', name: 'Ocean King Fishing 🎣', cat: 'Arcade' },
-      { id: 'cricketx', name: 'Cricket Crash 🏏', cat: 'Crash' },
-      { id: 'balloon', name: 'Balloon Multiplier 🎈', cat: 'Crash' },
-      { id: 'jetx', name: 'JetX Fighter ✈️', cat: 'Crash' },
-      { id: 'spaceman', name: 'Spaceman Odyssey 👨‍🚀', cat: 'Crash' },
-      { id: 'coinflip', name: 'Coin Toss 🪙', cat: 'Table' },
-      { id: 'hilo', name: 'Hi-Lo Cards 📶', cat: 'Cards' },
-      { id: 'poker', name: 'Texas Holdem Poker ♠️', cat: 'Cards' },
-      { id: 'Sicbo', name: 'Sic Bo Dice 🎲', cat: 'Table' },
-      { id: '7updown', name: '7 Up 7 Down ⬆️', cat: 'Table' },
-      { id: 'jhandimunda', name: 'Jhandi Munda 🎲', cat: 'Table' },
-      { id: 'carroulette', name: 'Car Roulette 🚗', cat: 'Live' },
-      { id: 'dogracing', name: 'Virtual Dog Racing 🐕', cat: 'Virtual' },
-      { id: 'horseracing', name: 'Royal Derby Racing 🐎', cat: 'Virtual' },
-      { id: 'footballx', name: 'Football Penalty ⚽', cat: 'Arcade' },
-      { id: 'tower', name: 'Tower Climber 🗼', cat: 'Arcade' },
-      { id: 'keverse', name: 'K-Verse Odyssey 🌌', cat: 'Slots' },
-      { id: 'egypt', name: 'Book of Ra Egypt 🏛️', cat: 'Slots' },
-      { id: 'wildwest', name: 'Wild West Gold 🤠', cat: 'Slots' },
-      { id: 'mayan', name: 'Mayan Treasures 🗿', cat: 'Slots' },
-      { id: 'pirates', name: 'Pirate Loot 🏴‍☠️', cat: 'Slots' },
-      { id: 'zombie', name: 'Zombie Apocalypse 🧟', cat: 'Slots' },
-      { id: 'vikings', name: 'Viking Valhalla 🪓', cat: 'Slots' },
-      { id: 'dragons', name: 'Dragon Flame 🔥', cat: 'Slots' },
-      { id: 'ganesha', name: 'Ganesha Gold 🐘', cat: 'Slots' },
-      { id: 'candybonanza', name: 'Candy Bonanza 🍬', cat: 'Slots' },
-      { id: 'superslots', name: 'Super 888 Slots 💎', cat: 'Slots' },
-      { id: 'fortunetree', name: 'Fortune Money Tree 🌳', cat: 'Slots' }
+      { id: 'graphprediction', name: 'Graph Prediction 📈', cat: 'Exchange' },
+      { id: 'wheelspin', name: 'Wheel Spin 🎡', cat: 'Live' }
     ];
 
     const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host);
@@ -418,40 +415,10 @@ app.get('/', (req, res) => {
       state.userBet = manualBet;
       state.animating = true;
       const gameId = state.currentGame;
-      let choice = choiceData;
-      if (gameId === 'chickenroad') {
-        choice = { targetPoint: document.getElementById('ch-target') ? document.getElementById('ch-target').value : 1.5 };
-      }
-
-      if (gameId === 'bigsmall') {
-        let count = 0;
-        let rollInterval = setInterval(() => {
-          state.diceVisuals = [Math.floor(Math.random()*6)+1, Math.floor(Math.random()*6)+1];
-          renderDiceUI();
-          count++;
-          if (count > 15) clearInterval(rollInterval);
-        }, 70);
-      } else if (gameId === 'colourguess') {
-        state.curtainOpen = false;
-        state.colourReveal = null;
-        renderColourStage();
-      } else if (gameId === 'chickenroad') {
-        state.chickenPosition = 1;
-        renderChickenRoadCanvas();
-      } else {
-        let count = 0;
-        const symbolsPool = ['💎', '7️⃣', '🔔', '🍒', '🍋', '⭐', '🍇'];
-        let slotInterval = setInterval(() => {
-          state.slotReels = [symbolsPool[Math.floor(Math.random()*symbolsPool.length)], symbolsPool[Math.floor(Math.random()*symbolsPool.length)], symbolsPool[Math.floor(Math.random()*symbolsPool.length)]];
-          renderSlotUI();
-          count++;
-          if(count > 18) clearInterval(slotInterval);
-        }, 80);
-      }
 
       const res = await fetch('/api/play-game', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mobile: state.user.mobile, game: gameId, betAmount: state.userBet, choice })
+        body: JSON.stringify({ mobile: state.user.mobile, game: gameId, betAmount: state.userBet, choice: choiceData })
       });
       const data = await res.json();
 
@@ -459,20 +426,16 @@ app.get('/', (req, res) => {
         state.animating = false;
         if (res.ok) {
           state.user.balance = data.newBalance;
-          
           if (gameId === 'bigsmall') {
             state.diceVisuals = [data.resultMeta.dice1, data.resultMeta.dice2];
             renderDiceUI();
-          } else if (gameId === 'colourguess') {
-            state.colourReveal = data.resultMeta.color;
-            state.curtainOpen = true;
-            renderColourStage();
           } else if (gameId === 'chickenroad') {
-            state.chickenPosition = data.resultMeta.reachedStep;
-            renderChickenRoadCanvas();
-          } else {
-            state.slotReels = data.resultMeta.symbols;
-            renderSlotUI();
+            if(data.won) state.chickenStep = Math.min(5, state.chickenStep + 1);
+            else state.chickenStep = 1;
+            renderChickenRoadUI();
+          } else if (gameId === 'wheelspin') {
+            state.wheelDeg += 720 + Math.floor(Math.random() * 360);
+            renderWheelUI();
           }
 
           setTimeout(() => {
@@ -481,12 +444,30 @@ app.get('/', (req, res) => {
             } else {
               showPopup('💥 YOU LOST ₹' + state.userBet + '. Better luck next time!');
             }
-          }, 600);
-
+          }, 400);
         } else {
           showPopup(data.error);
         }
-      }, 1400);
+      }, 800);
+    }
+
+    async function handleAviatorCashout() {
+      if(!state.hasBetAviator) return showPopup('Place a bet first!');
+      const currentX = state.aviator.currentX;
+      const res = await fetch('/api/play-game', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mobile: state.user.mobile, game: 'aviator', betAmount: state.userBet, choice: { cashoutX: currentX } })
+      });
+      const data = await res.json();
+      state.hasBetAviator = false;
+      if(res.ok) {
+        state.user.balance = data.newBalance;
+        if(data.won) {
+          showPopup('🚀 CASHED OUT! Won ₹' + (state.userBet * data.multiplier).toFixed(2));
+        } else {
+          showPopup('💥 CRASHED BEFORE CASHOUT! Lost ₹' + state.userBet);
+        }
+      }
     }
 
     async function handleAviatorBet() {
@@ -527,10 +508,6 @@ app.get('/', (req, res) => {
         ctx.lineWidth = 5;
         ctx.stroke();
 
-        ctx.lineTo(endX, h - 30); ctx.lineTo(30, h - 30);
-        ctx.fillStyle = state.aviator.status === 'CRASHED' ? 'rgba(239, 68, 68, 0.3)' : 'rgba(245, 158, 11, 0.3)';
-        ctx.fill();
-
         ctx.font = '32px sans-serif';
         ctx.fillText(state.aviator.status === 'CRASHED' ? '💥' : '🚀', endX - 16, endY + 10);
       }
@@ -551,40 +528,20 @@ app.get('/', (req, res) => {
       }
     }
 
-    function renderColourStage() {
-      const curtain = document.getElementById('colour-curtain');
-      const reveal = document.getElementById('colour-reveal-tag');
-      if(curtain && reveal) {
-        if(state.curtainOpen && state.colourReveal) {
-          curtain.style.transform = 'translateY(-100%)';
-          reveal.innerText = state.colourReveal.toUpperCase();
-          reveal.style.backgroundColor = state.colourReveal.toLowerCase() === 'white' ? '#fff' : state.colourReveal.toLowerCase();
-          reveal.style.color = state.colourReveal.toLowerCase() === 'white' || state.colourReveal.toLowerCase() === 'yellow' ? '#000' : '#fff';
-        } else {
-          curtain.style.transform = 'translateY(0)';
-          reveal.innerText = '???';
-        }
-      }
-    }
-
-    function renderChickenRoadCanvas() {
+    function renderChickenRoadUI() {
       const track = document.getElementById('chicken-track');
       if(track) {
         track.innerHTML = [1,2,3,4,5].map(step => {
-          const hasChicken = state.chickenPosition === step;
-          return '<div class="w-12 h-12 rounded-xl flex items-center justify-center font-bold text-lg ' + (hasChicken ? 'bg-amber-400 text-black border-2 border-white scale-110 shadow-lg' : 'bg-[#1b263b] border border-amber-500/30 text-amber-300') + '">' + (hasChicken ? '🐔' : step) + '</div>';
+          const active = state.chickenStep === step;
+          return '<div class="w-12 h-12 rounded-xl flex items-center justify-center font-bold text-lg ' + (active ? 'bg-amber-400 text-black border-2 border-white scale-110 shadow-lg' : 'bg-[#1b263b] border border-amber-500/30 text-amber-300') + '">' + (active ? '🐔' : step) + '</div>';
         }).join('');
       }
     }
 
-    function renderSlotUI() {
-      const s1 = document.getElementById('slot-1');
-      const s2 = document.getElementById('slot-2');
-      const s3 = document.getElementById('slot-3');
-      if(s1 && s2 && s3) {
-        s1.innerText = state.slotReels[0];
-        s2.innerText = state.slotReels[1];
-        s3.innerText = state.slotReels[2];
+    function renderWheelUI() {
+      const wheel = document.getElementById('wheel-element');
+      if(wheel) {
+        wheel.style.transform = 'rotate(' + state.wheelDeg + 'deg)';
       }
     }
 
@@ -635,7 +592,7 @@ app.get('/', (req, res) => {
             '<div class="text-5xl">👑</div>' +
             '<div>' +
               '<h1 class="text-2xl font-black gold-text">K³ EXCHANGE</h1>' +
-              '<p class="text-xs text-amber-200/70 mt-1">High-End Gaming Dashboard</p>' +
+              '<p class="text-xs text-amber-200/70 mt-1">Exclusive Casino & Exchange</p>' +
             '</div>' +
             '<div class="flex bg-black/60 p-1 rounded-xl border border-amber-500/30">' +
               '<button onclick="state.view=\\'login\\'; render();" class="w-1/2 py-2 rounded-lg text-xs font-bold ' + (!isReg ? 'gold-gradient text-black' : 'text-amber-300/60') + '">LOGIN</button>' +
@@ -734,7 +691,10 @@ app.get('/', (req, res) => {
               '<div id="aviator-x-text" class="relative z-10 text-5xl font-mono font-black gold-text">1.00x</div>' +
             '</div>' +
             manualBetBar +
-            '<button onclick="handleAviatorBet()" ' + (state.hasBetAviator ? 'disabled' : '') + ' class="w-full max-w-xs h-12 rounded-2xl font-black text-lg gold-gradient text-black shadow-lg">' + (state.hasBetAviator ? 'BET PLACED 🚀' : 'PLACE BET') + '</button>' +
+            (state.hasBetAviator ? 
+              '<button onclick="handleAviatorCashout()" class="w-full max-w-xs h-12 rounded-2xl font-black text-lg bg-emerald-600 text-white shadow-lg animate-pulse">CASHOUT 💰</button>' :
+              '<button onclick="handleAviatorBet()" class="w-full max-w-xs h-12 rounded-2xl font-black text-lg gold-gradient text-black shadow-lg">PLACE BET 🚀</button>'
+            ) +
           '</div>';
         } else if (state.currentGame === 'bigsmall') {
           gameContent = '<div class="flex-1 flex flex-col items-center justify-center p-4 space-y-4">' +
@@ -743,50 +703,66 @@ app.get('/', (req, res) => {
                 '<div id="dice-1" class="w-16 h-16 bg-gradient-to-br from-red-600 to-red-950 border-2 border-amber-400 rounded-2xl flex items-center justify-center text-3xl font-black text-white shadow-2xl">' + state.diceVisuals[0] + '</div>' +
                 '<div id="dice-2" class="w-16 h-16 bg-gradient-to-br from-red-600 to-red-950 border-2 border-amber-400 rounded-2xl flex items-center justify-center text-3xl font-black text-white shadow-2xl">' + state.diceVisuals[1] + '</div>' +
               '</div>' +
-              '<p class="text-[11px] text-amber-200 font-semibold">Predict Sum (2-6 Small | 7-12 Big)</p>' +
+              '<p class="text-[11px] text-amber-200 font-semibold">Sum 1-6 = Small | Sum 7-12 = Big</p>' +
             '</div>' +
             manualBetBar +
             '<div class="grid grid-cols-2 gap-3 w-full max-w-xs">' +
-              '<button onclick="playGameAction(\\'small\\')" class="glass-card h-16 rounded-2xl font-black text-amber-300 text-md active:scale-95">SMALL (2-6)</button>' +
+              '<button onclick="playGameAction(\\'small\\')" class="glass-card h-16 rounded-2xl font-black text-amber-300 text-md active:scale-95">SMALL (1-6)</button>' +
               '<button onclick="playGameAction(\\'big\\')" class="glass-card h-16 rounded-2xl font-black text-amber-300 text-md active:scale-95">BIG (7-12)</button>' +
-            '</div>' +
-          '</div>';
-        } else if (state.currentGame === 'colourguess') {
-          gameContent = '<div class="flex-1 flex flex-col items-center justify-between p-4 space-y-3">' +
-            '<div class="w-full flex-1 bg-[#090d16] rounded-2xl border-2 border-amber-500/40 relative flex flex-col items-center justify-center overflow-hidden min-h-[160px] neon-glow">' +
-              '<div id="colour-curtain" class="absolute inset-0 bg-gradient-to-b from-red-900 to-red-950 flex flex-col items-center justify-center border-b-4 border-amber-500 transition-all duration-700 z-10 space-y-2">' +
-                '<span class="text-4xl animate-bounce">💃</span>' +
-                '<span class="text-xs text-amber-200 font-bold tracking-widest">CHANGING ROOM</span>' +
-              '</div>' +
-              '<div id="colour-reveal-tag" class="w-20 h-20 rounded-full border-4 border-amber-400 flex items-center justify-center font-black text-md shadow-2xl bg-amber-500 text-black">???</div>' +
-            '</div>' +
-            manualBetBar +
-            '<div class="grid grid-cols-3 gap-2 w-full max-w-xs">' +
-              ['Red','White','Green','Black','Yellow','Blue'].map(c => '<button onclick="playGameAction(\\'' + c + '\\')" class="p-3 rounded-xl font-bold text-black gold-gradient text-xs active:scale-95">' + c + '</button>').join('') +
             '</div>' +
           '</div>';
         } else if (state.currentGame === 'chickenroad') {
           gameContent = '<div class="flex-1 flex flex-col items-center justify-between p-6 space-y-4">' +
             '<div class="w-full bg-[#090d16] p-5 rounded-2xl border-2 border-amber-500/40 flex flex-col items-center space-y-3 neon-glow">' +
-              '<span class="text-xs text-amber-300 font-bold">CHICKEN RUNWAY</span>' +
+              '<span class="text-xs text-amber-300 font-bold">CHICKEN ROAD RUNWAY</span>' +
               '<div id="chicken-track" class="w-full flex justify-between items-center"></div>' +
+              '<p class="text-[10px] text-amber-200/70">Step ' + state.chickenStep + ' (Multiplier: ' + (state.chickenStep === 1 ? '1.05x' : state.chickenStep === 2 ? '1.50x' : state.chickenStep === 3 ? '2.00x' : state.chickenStep === 4 ? '2.50x' : '3.00x') + ')</p>' +
             '</div>' +
-            '<input id="ch-target" type="number" step="0.1" value="1.5" class="w-48 p-2.5 bg-black border border-amber-500 rounded-xl text-center text-white font-mono text-sm">' +
             manualBetBar +
-            '<button onclick="playGameAction()" class="w-full max-w-xs gold-gradient text-black font-black py-3.5 rounded-xl text-md shadow-xl active:scale-95">START RUN 🐔</button>' +
+            '<button onclick="playGameAction({ step: state.chickenStep })" class="w-full max-w-xs gold-gradient text-black font-black py-3.5 rounded-xl text-md shadow-xl active:scale-95">CROSS ROAD 🐔</button>' +
           '</div>';
-        } else {
-          gameContent = '<div class="flex-1 flex flex-col items-center justify-center p-6 space-y-4">' +
-            '<div class="w-full max-w-xs bg-[#090d16] p-6 rounded-3xl border-2 border-amber-500/40 text-center space-y-4 shadow-2xl neon-glow">' +
-              '<div class="flex justify-center gap-3">' +
-                '<div id="slot-1" class="w-16 h-20 bg-gradient-to-b from-red-900 to-black border-2 border-amber-400 rounded-xl flex items-center justify-center text-3xl shadow-inner">' + state.slotReels[0] + '</div>' +
-                '<div id="slot-2" class="w-16 h-20 bg-gradient-to-b from-red-900 to-black border-2 border-amber-400 rounded-xl flex items-center justify-center text-3xl shadow-inner">' + state.slotReels[1] + '</div>' +
-                '<div id="slot-3" class="w-16 h-20 bg-gradient-to-b from-red-900 to-black border-2 border-amber-400 rounded-xl flex items-center justify-center text-3xl shadow-inner">' + state.slotReels[2] + '</div>' +
+        } else if (state.currentGame === 'colourguess') {
+          gameContent = '<div class="flex-1 flex flex-col items-center justify-center p-4 space-y-4">' +
+            '<div class="glass-card p-6 rounded-3xl w-full text-center space-y-3 neon-glow">' +
+              '<span class="text-xs text-amber-300 font-bold">CHOOSE YOUR LUCKY COLOUR</span>' +
+              '<div class="flex justify-center gap-2 pt-2">' +
+                ['White','Green','Black','Yellow','Blue'].map(c => '<button onclick="playGameAction(\\'' + c + '\\')" class="px-3 py-3 rounded-xl font-bold text-xs gold-gradient text-black">' + c + '</button>').join('') +
               '</div>' +
-              '<div class="text-amber-300 font-bold text-md">' + gameObj.name + '</div>' +
             '</div>' +
             manualBetBar +
-            '<button onclick="playGameAction(\\'spin\\')" class="w-full max-w-xs h-12 gold-gradient text-black font-black text-lg rounded-2xl shadow-xl active:scale-95">SPIN & PLAY</button>' +
+          '</div>';
+        } else if (state.currentGame === 'andarbahar') {
+          gameContent = '<div class="flex-1 flex flex-col items-center justify-center p-4 space-y-4">' +
+            '<div class="glass-card p-6 rounded-3xl w-full text-center space-y-3 neon-glow">' +
+              '<div class="text-4xl">🎴</div>' +
+              '<div class="text-amber-300 font-bold text-sm">Main Card: ' + state.andarCard + '</div>' +
+              '<p class="text-[11px] text-amber-200/70">Predict where matching card opens</p>' +
+            '</div>' +
+            manualBetBar +
+            '<div class="grid grid-cols-2 gap-3 w-full max-w-xs">' +
+              '<button onclick="playGameAction(\\'andar\\')" class="glass-card h-16 rounded-2xl font-black text-amber-300 text-md">ANDAR</button>' +
+              '<button onclick="playGameAction(\\'bahar\\')" class="glass-card h-16 rounded-2xl font-black text-amber-300 text-md">BAHAR</button>' +
+            '</div>' +
+          '</div>';
+        } else if (state.currentGame === 'graphprediction') {
+          gameContent = '<div class="flex-1 flex flex-col items-center justify-center p-4 space-y-4">' +
+            '<div class="glass-card p-6 rounded-3xl w-full text-center space-y-3 neon-glow">' +
+              '<div class="text-4xl">📈</div>' +
+              '<div class="text-amber-300 font-bold text-sm">Graph Direction Trend</div>' +
+            '</div>' +
+            manualBetBar +
+            '<div class="grid grid-cols-2 gap-3 w-full max-w-xs">' +
+              '<button onclick="playGameAction(\\'up\\')" class="glass-card h-16 rounded-2xl font-black text-emerald-400 text-md">UP 🟢</button>' +
+              '<button onclick="playGameAction(\\'down\\')" class="glass-card h-16 rounded-2xl font-black text-red-400 text-md">DOWN 🔴</button>' +
+            '</div>' +
+          '</div>';
+        } else if (state.currentGame === 'wheelspin') {
+          gameContent = '<div class="flex-1 flex flex-col items-center justify-center p-4 space-y-4">' +
+            '<div class="relative w-40 h-40 rounded-full border-4 border-amber-400 flex items-center justify-center overflow-hidden glass-card neon-glow">' +
+              '<div id="wheel-element" class="absolute inset-0 bg-gradient-to-r from-red-600 via-amber-500 to-purple-600 transition-transform duration-1000 flex items-center justify-center font-black text-white text-lg">🎡</div>' +
+            '</div>' +
+            manualBetBar +
+            '<button onclick="playGameAction(\\'spin\\')" class="w-full max-w-xs gold-gradient text-black font-black py-3 rounded-xl shadow-xl">SPIN WHEEL 🎯</button>' +
           '</div>';
         }
 
@@ -834,7 +810,7 @@ app.get('/', (req, res) => {
 
       if(state.view === 'game') {
         if(state.currentGame === 'aviator') renderAviatorCanvas();
-        if(state.currentGame === 'chickenroad') renderChickenRoadCanvas();
+        if(state.currentGame === 'chickenroad') renderChickenRoadUI();
       }
     }
     render();
