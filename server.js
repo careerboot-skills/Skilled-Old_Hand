@@ -183,7 +183,7 @@ app.post('/api/play-game', async (req, res) => {
   else {
     won = Math.random() < 0.25;
     multiplier = won ? 2.0 : 0;
-    resultMeta = { symbols: won ? ['🎰','🎰','🎰'] : ['🎰','🍋','🍒'] };
+    resultMeta = { symbols: won ? ['💎','💎','💎'] : ['🍒','🍋','🔔'] };
   }
 
   const winPayout = won ? +(numBet * multiplier).toFixed(2) : 0;
@@ -255,7 +255,7 @@ app.post('/api/admin/process-txn', async (req, res) => {
 });
 
 // ==========================================
-// EMBEDDED VISUAL FRONTEND ENGINE
+// EMBEDDED HIGH-END VISUAL FRONTEND ENGINE
 // ==========================================
 app.get('/', (req, res) => {
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
@@ -272,19 +272,12 @@ app.get('/', (req, res) => {
     .gold-gradient { background: linear-gradient(135deg, #bf953f, #fcf6ba, #b38728, #fbf5b7); }
     .gold-text { background: linear-gradient(135deg, #bf953f, #fcf6ba, #b38728); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
     .tomato-card { background: linear-gradient(145deg, #800a0a, #360303); border: 2px solid #d4af37; box-shadow: 0 10px 25px rgba(0,0,0,0.8); }
-    .no-scrollbar::-webkit-scrollbar { display: none; }
-    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-    
-    @keyframes spinReel {
+    .neon-border { box-shadow: 0 0 15px rgba(212, 175, 55, 0.4); }
+    @keyframes slotSpin {
       0% { transform: translateY(0); }
-      100% { transform: translateY(-300px); }
+      100% { transform: translateY(-240px); }
     }
-    .animate-spin-reel { animation: spinReel 0.15s linear infinite; }
-    @keyframes pulseGlow {
-      0%, 100% { opacity: 0.3; }
-      50% { opacity: 0.8; }
-    }
-    .animate-pulse-glow { animation: pulseGlow 1.5s ease-in-out infinite; }
+    .slot-spinning { animation: slotSpin 0.1s linear infinite; }
   </style>
 </head>
 <body class="h-full w-full flex items-center justify-center p-0 md:p-4">
@@ -301,11 +294,11 @@ app.get('/', (req, res) => {
       hasBetAviator: false,
       adminTxns: [],
       animating: false,
-      diceVisuals: [1, 1],
+      diceVisuals: [3, 4],
       colourReveal: null,
       curtainOpen: false,
-      slotSymbols: ['🎰', '🎰', '🎰'],
-      chickenPosition: 0
+      chickenPosition: 1,
+      slotReels: ['💎', '7️⃣', '🔔']
     };
 
     const GAMES_LIST = [
@@ -366,9 +359,7 @@ app.get('/', (req, res) => {
       if (data.type === 'AVIATOR_STATE') {
         state.aviator = data;
         if (data.status === 'WAITING') state.hasBetAviator = false;
-        if (state.view === 'game' && state.currentGame === 'aviator') {
-          renderAviatorCanvas();
-        }
+        if (state.view === 'game' && state.currentGame === 'aviator') renderAviatorCanvas();
       }
     };
 
@@ -452,8 +443,13 @@ app.get('/', (req, res) => {
 
     async function playGameAction(choiceData) {
       if(state.animating) return;
-      if(state.user.balance < state.userBet) return showPopup('Insufficient Balance');
+      const betInput = document.getElementById('manual-bet-amt');
+      const manualBet = betInput ? parseFloat(betInput.value) : state.userBet;
 
+      if(isNaN(manualBet) || manualBet <= 0) return showPopup('Please enter a valid bet amount!');
+      if(state.user.balance < manualBet) return showPopup('Insufficient Balance');
+
+      state.userBet = manualBet;
       state.animating = true;
       const gameId = state.currentGame;
       let choice = choiceData;
@@ -461,22 +457,30 @@ app.get('/', (req, res) => {
         choice = { targetPoint: document.getElementById('ch-target') ? document.getElementById('ch-target').value : 1.5 };
       }
 
-      // Visual animations before fetching server outcome
       if (gameId === 'bigsmall') {
         let count = 0;
         let rollInterval = setInterval(() => {
           state.diceVisuals = [Math.floor(Math.random()*6)+1, Math.floor(Math.random()*6)+1];
           renderDiceUI();
           count++;
-          if (count > 12) clearInterval(rollInterval);
-        }, 80);
+          if (count > 15) clearInterval(rollInterval);
+        }, 70);
       } else if (gameId === 'colourguess') {
         state.curtainOpen = false;
         state.colourReveal = null;
         renderColourStage();
       } else if (gameId === 'chickenroad') {
-        state.chickenPosition = 0;
+        state.chickenPosition = 1;
         renderChickenRoadCanvas();
+      } else {
+        let count = 0;
+        const symbolsPool = ['💎', '7️⃣', '🔔', '🍒', '🍋', '⭐', '🍇'];
+        let slotInterval = setInterval(() => {
+          state.slotReels = [symbolsPool[Math.floor(Math.random()*symbolsPool.length)], symbolsPool[Math.floor(Math.random()*symbolsPool.length)], symbolsPool[Math.floor(Math.random()*symbolsPool.length)]];
+          renderSlotUI();
+          count++;
+          if(count > 18) clearInterval(slotInterval);
+        }, 80);
       }
 
       const res = await fetch('/api/play-game', {
@@ -500,6 +504,9 @@ app.get('/', (req, res) => {
           } else if (gameId === 'chickenroad') {
             state.chickenPosition = data.resultMeta.reachedStep;
             renderChickenRoadCanvas();
+          } else {
+            state.slotReels = data.resultMeta.symbols;
+            renderSlotUI();
           }
 
           setTimeout(() => {
@@ -513,11 +520,16 @@ app.get('/', (req, res) => {
         } else {
           showPopup(data.error);
         }
-      }, gameId === 'bigsmall' || gameId === 'colourguess' ? 1200 : 500);
+      }, 1400);
     }
 
     async function handleAviatorBet() {
-      if(state.user.balance < state.userBet) return showPopup('Insufficient Balance');
+      const betInput = document.getElementById('manual-bet-amt');
+      const manualBet = betInput ? parseFloat(betInput.value) : state.userBet;
+      if(isNaN(manualBet) || manualBet <= 0) return showPopup('Please enter a valid bet amount!');
+      if(state.user.balance < manualBet) return showPopup('Insufficient Balance');
+
+      state.userBet = manualBet;
       await fetch('/api/aviator/register-bet', { method: 'POST' });
       state.hasBetAviator = true;
       state.user.balance -= state.userBet;
@@ -532,7 +544,8 @@ app.get('/', (req, res) => {
       const h = cvs.height = cvs.clientHeight;
 
       ctx.clearRect(0, 0, w, h);
-      ctx.strokeStyle = '#222';
+      ctx.strokeStyle = '#220a0a';
+      ctx.lineWidth = 1;
       for(let x=0; x<w; x+=30) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke(); }
       for(let y=0; y<h; y+=30) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); }
 
@@ -543,23 +556,23 @@ app.get('/', (req, res) => {
 
         ctx.beginPath();
         ctx.moveTo(30, h - 30);
-        ctx.quadraticCurveTo(w * 0.3, h - 30, endX, endY);
+        ctx.quadraticCurveTo(w * 0.4, h - 30, endX, endY);
         ctx.strokeStyle = state.aviator.status === 'CRASHED' ? '#ef4444' : '#eab308';
         ctx.lineWidth = 4;
         ctx.stroke();
 
         ctx.lineTo(endX, h - 30); ctx.lineTo(30, h - 30);
-        ctx.fillStyle = state.aviator.status === 'CRASHED' ? 'rgba(239, 68, 68, 0.2)' : 'rgba(234, 179, 8, 0.2)';
+        ctx.fillStyle = state.aviator.status === 'CRASHED' ? 'rgba(239, 68, 68, 0.25)' : 'rgba(234, 179, 8, 0.25)';
         ctx.fill();
 
-        ctx.font = '28px sans-serif';
-        ctx.fillText(state.aviator.status === 'CRASHED' ? '💥' : '🚀', endX - 14, endY + 8);
+        ctx.font = '32px sans-serif';
+        ctx.fillText(state.aviator.status === 'CRASHED' ? '💥' : '✈️', endX - 16, endY + 10);
       }
 
       const txt = document.getElementById('aviator-x-text');
       if(txt) {
         txt.innerText = state.aviator.currentX.toFixed(2) + 'x';
-        txt.className = 'text-4xl font-mono font-black ' + (state.aviator.status === 'CRASHED' ? 'text-red-500' : 'gold-text');
+        txt.className = 'text-5xl font-mono font-black ' + (state.aviator.status === 'CRASHED' ? 'text-red-500' : 'gold-text');
       }
     }
 
@@ -593,8 +606,19 @@ app.get('/', (req, res) => {
       if(track) {
         track.innerHTML = [1,2,3,4,5].map(step => {
           const hasChicken = state.chickenPosition === step;
-          return '<div class="w-12 h-12 rounded-xl flex items-center justify-center font-bold text-lg ' + (hasChicken ? 'bg-amber-400 text-black border-2 border-white animate-bounce' : 'bg-red-950 border border-amber-500/30 text-amber-300') + '">' + (hasChicken ? '🐔' : step) + '</div>';
+          return '<div class="w-12 h-12 rounded-xl flex items-center justify-center font-bold text-lg ' + (hasChicken ? 'bg-amber-400 text-black border-2 border-white scale-110 shadow-lg' : 'bg-red-950 border border-amber-500/30 text-amber-300') + '">' + (hasChicken ? '🐔' : step) + '</div>';
         }).join('');
+      }
+    }
+
+    function renderSlotUI() {
+      const s1 = document.getElementById('slot-1');
+      const s2 = document.getElementById('slot-2');
+      const s3 = document.getElementById('slot-3');
+      if(s1 && s2 && s3) {
+        s1.innerText = state.slotReels[0];
+        s2.innerText = state.slotReels[1];
+        s3.innerText = state.slotReels[2];
       }
     }
 
@@ -732,53 +756,71 @@ app.get('/', (req, res) => {
         const gameObj = GAMES_LIST.find(g => g.id === state.currentGame);
         let gameContent = '';
 
+        const manualBetBar = '<div class="flex items-center gap-2 bg-black/70 p-2 rounded-xl border border-amber-500/40 w-full max-w-xs">' +
+          '<span class="text-xs text-amber-300 font-bold whitespace-nowrap">BET (₹):</span>' +
+          '<input id="manual-bet-amt" type="number" min="10" value="' + state.userBet + '" class="w-full bg-black border border-amber-500/60 rounded-lg text-center font-mono font-bold text-amber-300 py-1.5 text-sm outline-none">' +
+        '</div>';
+
         if (state.currentGame === 'aviator') {
           gameContent = '<div class="flex-1 flex flex-col items-center justify-between p-4 space-y-3 relative overflow-hidden">' +
-            '<div class="w-full flex-1 bg-black/80 rounded-2xl border border-amber-500/30 relative flex items-center justify-center overflow-hidden min-h-[260px]">' +
+            '<div class="w-full flex-1 bg-black/90 rounded-2xl border-2 border-amber-500/40 relative flex items-center justify-center overflow-hidden min-h-[200px] neon-border">' +
               '<canvas id="aviator-canvas" class="absolute inset-0 w-full h-full"></canvas>' +
-              '<div id="aviator-x-text" class="relative z-10 text-4xl font-mono font-black gold-text">1.00x</div>' +
+              '<div id="aviator-x-text" class="relative z-10 text-5xl font-mono font-black gold-text">1.00x</div>' +
             '</div>' +
-            '<button onclick="handleAviatorBet()" ' + (state.hasBetAviator ? 'disabled' : '') + ' class="w-full max-w-xs h-14 rounded-2xl font-black text-xl gold-gradient text-black shadow-lg">' + (state.hasBetAviator ? 'BET PLACED 🚀' : 'PLACE BET ₹' + state.userBet) + '</button>' +
+            manualBetBar +
+            '<button onclick="handleAviatorBet()" ' + (state.hasBetAviator ? 'disabled' : '') + ' class="w-full max-w-xs h-12 rounded-2xl font-black text-lg gold-gradient text-black shadow-lg">' + (state.hasBetAviator ? 'BET PLACED 🚀' : 'PLACE BET') + '</button>' +
           '</div>';
         } else if (state.currentGame === 'bigsmall') {
-          gameContent = '<div class="flex-1 flex flex-col items-center justify-center p-6 space-y-6">' +
-            '<div class="tomato-card p-6 rounded-3xl w-full text-center space-y-4">' +
+          gameContent = '<div class="flex-1 flex flex-col items-center justify-center p-4 space-y-4">' +
+            '<div class="tomato-card p-5 rounded-3xl w-full text-center space-y-3 neon-border">' +
               '<div class="flex justify-center gap-6">' +
-                '<div id="dice-1" class="w-20 h-20 bg-red-800 border-2 border-amber-400 rounded-2xl flex items-center justify-center text-4xl font-black text-white shadow-xl">' + state.diceVisuals[0] + '</div>' +
-                '<div id="dice-2" class="w-20 h-20 bg-red-800 border-2 border-amber-400 rounded-2xl flex items-center justify-center text-4xl font-black text-white shadow-xl">' + state.diceVisuals[1] + '</div>' +
+                '<div id="dice-1" class="w-16 h-16 bg-gradient-to-br from-red-600 to-red-950 border-2 border-amber-400 rounded-2xl flex items-center justify-center text-3xl font-black text-white shadow-2xl">' + state.diceVisuals[0] + '</div>' +
+                '<div id="dice-2" class="w-16 h-16 bg-gradient-to-br from-red-600 to-red-950 border-2 border-amber-400 rounded-2xl flex items-center justify-center text-3xl font-black text-white shadow-2xl">' + state.diceVisuals[1] + '</div>' +
               '</div>' +
-              '<p class="text-xs text-amber-200">Predict Sum (2-6 Small | 7-12 Big)</p>' +
+              '<p class="text-[11px] text-amber-200 font-semibold">Predict Sum (2-6 Small | 7-12 Big)</p>' +
             '</div>' +
-            '<div class="grid grid-cols-2 gap-4 w-full max-w-xs">' +
-              '<button onclick="playGameAction(\\'small\\')" class="tomato-card h-20 rounded-2xl font-black text-amber-300 text-lg">SMALL (2-6)</button>' +
-              '<button onclick="playGameAction(\\'big\\')" class="tomato-card h-20 rounded-2xl font-black text-amber-300 text-lg">BIG (7-12)</button>' +
+            manualBetBar +
+            '<div class="grid grid-cols-2 gap-3 w-full max-w-xs">' +
+              '<button onclick="playGameAction(\\'small\\')" class="tomato-card h-16 rounded-2xl font-black text-amber-300 text-md active:scale-95">SMALL (2-6)</button>' +
+              '<button onclick="playGameAction(\\'big\\')" class="tomato-card h-16 rounded-2xl font-black text-amber-300 text-md active:scale-95">BIG (7-12)</button>' +
             '</div>' +
           '</div>';
         } else if (state.currentGame === 'colourguess') {
           gameContent = '<div class="flex-1 flex flex-col items-center justify-between p-4 space-y-3">' +
-            '<div class="w-full flex-1 bg-black/80 rounded-2xl border border-amber-500/30 relative flex flex-col items-center justify-center overflow-hidden min-h-[220px]">' +
-              '<div id="colour-curtain" class="absolute inset-0 bg-red-950 flex items-center justify-center border-b-4 border-amber-500 transition-all duration-700 z-10">' +
-                '<span class="text-4xl">💃</span>' +
+            '<div class="w-full flex-1 bg-black/90 rounded-2xl border-2 border-amber-500/40 relative flex flex-col items-center justify-center overflow-hidden min-h-[160px] neon-border">' +
+              '<div id="colour-curtain" class="absolute inset-0 bg-gradient-to-b from-red-900 to-red-950 flex flex-col items-center justify-center border-b-4 border-amber-500 transition-all duration-700 z-10 space-y-2">' +
+                '<span class="text-4xl animate-bounce">💃</span>' +
+                '<span class="text-xs text-amber-200 font-bold tracking-widest">CHANGING ROOM</span>' +
               '</div>' +
-              '<div id="colour-reveal-tag" class="w-24 h-24 rounded-full border-4 border-amber-400 flex items-center justify-center font-black text-lg shadow-2xl bg-amber-500 text-black">???</div>' +
+              '<div id="colour-reveal-tag" class="w-20 h-20 rounded-full border-4 border-amber-400 flex items-center justify-center font-black text-md shadow-2xl bg-amber-500 text-black">???</div>' +
             '</div>' +
+            manualBetBar +
             '<div class="grid grid-cols-3 gap-2 w-full max-w-xs">' +
-              ['Red','White','Green','Black','Yellow','Blue'].map(c => '<button onclick="playGameAction(\\'' + c + '\\')" class="p-3.5 rounded-xl font-bold text-black gold-gradient text-xs">' + c + '</button>').join('') +
+              ['Red','White','Green','Black','Yellow','Blue'].map(c => '<button onclick="playGameAction(\\'' + c + '\\')" class="p-3 rounded-xl font-bold text-black gold-gradient text-xs active:scale-95">' + c + '</button>').join('') +
             '</div>' +
           '</div>';
         } else if (state.currentGame === 'chickenroad') {
           gameContent = '<div class="flex-1 flex flex-col items-center justify-between p-6 space-y-4">' +
-            '<div id="chicken-track" class="w-full bg-black/80 p-4 rounded-2xl border border-amber-500/30 flex justify-between items-center"></div>' +
-            '<input id="ch-target" type="number" step="0.1" value="1.5" class="w-48 p-3 bg-black border border-amber-500 rounded-xl text-center text-white font-mono">' +
-            '<button onclick="playGameAction()" class="w-full max-w-xs gold-gradient text-black font-black py-4 rounded-xl text-lg shadow-xl">START RUN 🐔</button>' +
+            '<div class="w-full bg-black/90 p-5 rounded-2xl border-2 border-amber-500/40 flex flex-col items-center space-y-3 neon-border">' +
+              '<span class="text-xs text-amber-300 font-bold">CHICKEN RUNWAY</span>' +
+              '<div id="chicken-track" class="w-full flex justify-between items-center"></div>' +
+            '</div>' +
+            '<input id="ch-target" type="number" step="0.1" value="1.5" class="w-48 p-2.5 bg-black border border-amber-500 rounded-xl text-center text-white font-mono text-sm">' +
+            manualBetBar +
+            '<button onclick="playGameAction()" class="w-full max-w-xs gold-gradient text-black font-black py-3.5 rounded-xl text-md shadow-xl active:scale-95">START RUN 🐔</button>' +
           '</div>';
         } else {
-          gameContent = '<div class="flex-1 flex flex-col items-center justify-center p-6 space-y-6">' +
-            '<div class="w-full max-w-xs bg-black/80 p-6 rounded-3xl border border-amber-500/30 text-center space-y-3 shadow-2xl">' +
-              '<div class="text-6xl animate-pulse">🎰</div>' +
-              '<div class="text-amber-300 font-bold text-lg">' + gameObj.name + '</div>' +
+          gameContent = '<div class="flex-1 flex flex-col items-center justify-center p-6 space-y-4">' +
+            '<div class="w-full max-w-xs bg-black/90 p-6 rounded-3xl border-2 border-amber-500/40 text-center space-y-4 shadow-2xl neon-border">' +
+              '<div class="flex justify-center gap-3">' +
+                '<div id="slot-1" class="w-16 h-20 bg-gradient-to-b from-red-900 to-black border-2 border-amber-400 rounded-xl flex items-center justify-center text-3xl shadow-inner">' + state.slotReels[0] + '</div>' +
+                '<div id="slot-2" class="w-16 h-20 bg-gradient-to-b from-red-900 to-black border-2 border-amber-400 rounded-xl flex items-center justify-center text-3xl shadow-inner">' + state.slotReels[1] + '</div>' +
+                '<div id="slot-3" class="w-16 h-20 bg-gradient-to-b from-red-900 to-black border-2 border-amber-400 rounded-xl flex items-center justify-center text-3xl shadow-inner">' + state.slotReels[2] + '</div>' +
+              '</div>' +
+              '<div class="text-amber-300 font-bold text-md">' + gameObj.name + '</div>' +
             '</div>' +
-            '<button onclick="playGameAction(\\'spin\\')" class="w-full max-w-xs h-14 gold-gradient text-black font-black text-xl rounded-2xl shadow-xl">SPIN & PLAY (₹' + state.userBet + ')</button>' +
+            manualBetBar +
+            '<button onclick="playGameAction(\\'spin\\')" class="w-full max-w-xs h-12 gold-gradient text-black font-black text-lg rounded-2xl shadow-xl active:scale-95">SPIN & PLAY</button>' +
           '</div>';
         }
 
