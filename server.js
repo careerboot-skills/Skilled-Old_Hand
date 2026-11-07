@@ -39,34 +39,9 @@ const transactionSchema = new mongoose.Schema({
 const Transaction = mongoose.model('Transaction', transactionSchema);
 
 // ==========================================
-// GAME RIGGING LOGIC
+// GAME RIGGING & WEBSOCKET ENGINE
 // ==========================================
 let activeAviatorBets = 0;
-
-function getAviatorMultiplier(hasBet) {
-  if (hasBet) {
-    return +(1.00 + Math.random() * 0.43).toFixed(2);
-  }
-  const rand = Math.random() * 100;
-  if (rand < 20) return +(5.00 + Math.random() * 10.00).toFixed(2);
-  if (rand < 60) return +(15.00 + Math.random() * 35.00).toFixed(2);
-  if (rand < 90) return +(50.00 + Math.random() * 100.00).toFixed(2);
-  return +(150.00 + Math.random() * 300.00).toFixed(2);
-}
-
-function getColorGuessResult() {
-  const rand = Math.random() * 100;
-  if (rand < 15) return 'Red';
-  if (rand < 30) return 'White';
-  if (rand < 50) return 'Green';
-  if (rand < 70) return 'Black';
-  if (rand < 85) return 'Yellow';
-  return 'Blue';
-}
-
-// ==========================================
-// AVIATOR WEBSOCKET ENGINE
-// ==========================================
 let aviatorState = { status: 'WAITING', currentX: 1.00, crashX: 1.00 };
 
 function broadcast(data) {
@@ -82,7 +57,7 @@ function runAviatorLoop() {
 
   setTimeout(() => {
     const hasBet = activeAviatorBets > 0;
-    aviatorState.crashX = getAviatorMultiplier(hasBet);
+    aviatorState.crashX = hasBet ? +(1.00 + Math.random() * 0.43).toFixed(2) : +(5.00 + Math.random() * 15.00).toFixed(2);
     aviatorState.status = 'FLYING';
 
     let startTime = Date.now();
@@ -107,7 +82,7 @@ function runAviatorLoop() {
 runAviatorLoop();
 
 // ==========================================
-// HTTP APIS
+// REST APIS
 // ==========================================
 app.post('/api/register', async (req, res) => {
   const { name, mobile, password } = req.body;
@@ -164,18 +139,14 @@ app.post('/api/play-game', async (req, res) => {
     resultMeta = { dice1: d1, dice2: d2, sum: d1 + d2, result: isBigChoice ? 'SMALL' : 'BIG' };
   } 
   else if (game === 'colourguess') {
-    const outcomeColor = getColorGuessResult();
+    const colors = ['Red', 'White', 'Green', 'Black', 'Yellow', 'Blue'];
+    const outcomeColor = colors[Math.floor(Math.random() * colors.length)];
     won = String(choice).toLowerCase() === outcomeColor.toLowerCase();
     multiplier = won ? 3.5 : 0;
     resultMeta = { color: outcomeColor };
   } 
-  else if (game === 'candycrash') {
-    won = Math.random() < 0.05; 
-    multiplier = won ? 1.5 : 0;
-    resultMeta = { grid: ['🍬','🍭','🍫','🍩','🍇','🍉','🍬','🍬','🍬'] };
-  } 
   else if (game === 'chickenroad') {
-    const targetPoint = parseFloat(choice.targetPoint) || 1.5;
+    const targetPoint = parseFloat(choice?.targetPoint) || 1.5;
     won = targetPoint < 2.0; 
     multiplier = won ? targetPoint : 0;
     resultMeta = { reachedStep: won ? 4 : 2 };
@@ -255,7 +226,7 @@ app.post('/api/admin/process-txn', async (req, res) => {
 });
 
 // ==========================================
-// EMBEDDED HIGH-END VISUAL FRONTEND ENGINE
+// HIGH-PERFORMANCE EMBEDDED FRONTEND
 // ==========================================
 app.get('/', (req, res) => {
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
@@ -271,7 +242,7 @@ app.get('/', (req, res) => {
     body, html { height: 100%; width: 100%; margin: 0; padding: 0; overflow: hidden; background-color: #07090e; font-family: ui-sans-serif, system-ui; }
     .gold-gradient { background: linear-gradient(135deg, #f59e0b, #fbbf24, #d97706); }
     .gold-text { background: linear-gradient(135deg, #fef08a, #f59e0b, #fde047); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-    .glass-card { background: rgba(20, 26, 38, 0.85); backdrop-filter: blur(12px); border: 1px solid rgba(245, 158, 11, 0.3); box-shadow: 0 15px 35px rgba(0,0,0,0.7); }
+    .glass-card { background: rgba(20, 26, 38, 0.9); backdrop-filter: blur(12px); border: 1px solid rgba(245, 158, 11, 0.3); box-shadow: 0 15px 35px rgba(0,0,0,0.7); }
     .neon-glow { box-shadow: 0 0 25px rgba(245, 158, 11, 0.25); }
   </style>
 </head>
